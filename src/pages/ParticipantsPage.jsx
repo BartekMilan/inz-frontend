@@ -30,81 +30,91 @@ import { useToast } from "@/hooks/use-toast"
 const initialParticipants = [
   {
     id: 1,
-    firstName: "Jan",
-    lastName: "Kowalski",
-    email: "jan.kowalski@example.pl",
+    firstName: "Leszek",
+    lastName: "Szarkowicz",
+    email: "leszek.szarkowicz@example.pl",
+    eventType: "choir",
     paymentStatus: "Opłacone",
     documentStatus: "Gotowy",
   },
   {
     id: 2,
-    firstName: "Anna",
-    lastName: "Nowak",
-    email: "anna.nowak@example.pl",
+    firstName: "Dorota",
+    lastName: "Szarkowicz",
+    email: "dorota.szarkowicz@example.pl",
+    eventType: "seminar",
     paymentStatus: "Nieopłacone",
     documentStatus: "-",
   },
   {
     id: 3,
-    firstName: "Piotr",
-    lastName: "Wiśniewski",
-    email: "piotr.wisniewski@example.pl",
+    firstName: "Stanisław",
+    lastName: "Sławiński",
+    email: "stanley.slawinski@example.pl",
+    eventType: "convention",
     paymentStatus: "Opłacone",
     documentStatus: "Gotowy",
   },
   {
     id: 4,
-    firstName: "Maria",
-    lastName: "Wójcik",
-    email: "maria.wojcik@example.pl",
+    firstName: "Sławomir",
+    lastName: "Stasziński",
+    email: "slawomir.staszinski@example.pl",
+    eventType: "choir",
     paymentStatus: "Oczekuje",
     documentStatus: "-",
   },
   {
     id: 5,
     firstName: "Krzysztof",
-    lastName: "Kamiński",
-    email: "krzysztof.kaminski@example.pl",
+    lastName: "Nawrot",
+    email: "krzysztof.nawrot@example.pl",
+    eventType: "seminar",
     paymentStatus: "Opłacone",
     documentStatus: "Gotowy",
   },
   {
     id: 6,
-    firstName: "Magdalena",
-    lastName: "Lewandowska",
-    email: "magdalena.lewandowska@example.pl",
+    firstName: "Mati",
+    lastName: "Zabój",
+    email: "matthew.zaboj@example.pl",
+    eventType: "convention",
     paymentStatus: "Nieopłacone",
     documentStatus: "-",
   },
   {
     id: 7,
-    firstName: "Tomasz",
-    lastName: "Zieliński",
-    email: "tomasz.zielinski@example.pl",
+    firstName: "Miriam",
+    lastName: "Szarkowicz",
+    email: "miriam.sz@example.pl",
+    eventType: "choir",
     paymentStatus: "Opłacone",
     documentStatus: "Gotowy",
   },
   {
     id: 8,
-    firstName: "Agnieszka",
-    lastName: "Szymańska",
-    email: "agnieszka.szymanska@example.pl",
+    firstName: "Kesja",
+    lastName: "Szarkowicz",
+    email: "kellie.szarkowicz@example.pl",
+    eventType: "seminar",
     paymentStatus: "Oczekuje",
     documentStatus: "-",
   },
   {
     id: 9,
-    firstName: "Marek",
-    lastName: "Woźniak",
-    email: "marek.wozniak@example.pl",
+    firstName: "Daniel",
+    lastName: "Szarkowicz",
+    email: "danek.szarkowicz@example.pl",
+    eventType: "convention",
     paymentStatus: "Opłacone",
     documentStatus: "Gotowy",
   },
   {
     id: 10,
-    firstName: "Katarzyna",
-    lastName: "Dąbrowska",
-    email: "katarzyna.dabrowska@example.pl",
+    firstName: "Franciszek",
+    lastName: "Olejarz",
+    email: "francesco@example.pl",
+    eventType: "choir",
     paymentStatus: "Nieopłacone",
     documentStatus: "-",
   },
@@ -113,7 +123,7 @@ const initialParticipants = [
 export default function ParticipantsPage() {
   const [participants, setParticipants] = useState(initialParticipants)
   const [searchQuery, setSearchQuery] = useState("")
-  const [paymentFilter, setPaymentFilter] = useState("Wszystkie")
+  const [eventTypeFilter, setEventTypeFilter] = useState("Wszystkie")
   const [selectedRows, setSelectedRows] = useState([])
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [editingParticipant, setEditingParticipant] = useState(null)
@@ -121,20 +131,21 @@ export default function ParticipantsPage() {
     firstName: "",
     lastName: "",
     email: "",
+    eventType: "choir",
     paymentStatus: "Oczekuje",
   })
   const { toast } = useToast()
 
-  // Filter participants based on search and payment status
+  // Filter participants based on search and event type
   const filteredParticipants = participants.filter((participant) => {
     const fullName = `${participant.firstName} ${participant.lastName}`.toLowerCase()
     const matchesSearch =
       fullName.includes(searchQuery.toLowerCase()) ||
       participant.email.toLowerCase().includes(searchQuery.toLowerCase())
 
-    const matchesPayment = paymentFilter === "Wszystkie" || participant.paymentStatus === paymentFilter
+    const matchesEventType = eventTypeFilter === "Wszystkie" || participant.eventType === eventTypeFilter
 
-    return matchesSearch && matchesPayment
+    return matchesSearch && matchesEventType
   })
 
   // Toggle row selection
@@ -214,6 +225,7 @@ export default function ParticipantsPage() {
       firstName: "",
       lastName: "",
       email: "",
+      eventType: "choir",
       paymentStatus: "Oczekuje",
     })
     setIsAddModalOpen(true)
@@ -226,6 +238,7 @@ export default function ParticipantsPage() {
       firstName: participant.firstName,
       lastName: participant.lastName,
       email: participant.email,
+      eventType: participant.eventType,
       paymentStatus: participant.paymentStatus,
     })
     setIsAddModalOpen(true)
@@ -328,15 +341,15 @@ export default function ParticipantsPage() {
           </div>
 
           {/* Middle: Filter */}
-          <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+          <Select value={eventTypeFilter} onValueChange={setEventTypeFilter}>
             <SelectTrigger className="w-full md:w-48">
-              <SelectValue placeholder="Status płatności" />
+              <SelectValue placeholder="Typ wydarzenia" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="Wszystkie">Wszystkie</SelectItem>
-              <SelectItem value="Opłacone">Opłacone</SelectItem>
-              <SelectItem value="Nieopłacone">Nieopłacone</SelectItem>
-              <SelectItem value="Oczekuje">Oczekuje</SelectItem>
+              <SelectItem value="choir">Chór</SelectItem>
+              <SelectItem value="seminar">Seminarium</SelectItem>
+              <SelectItem value="convention">Konwencja</SelectItem>
             </SelectContent>
           </Select>
 
@@ -366,6 +379,7 @@ export default function ParticipantsPage() {
                 </TableHead>
                 <TableHead>Imię i Nazwisko</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Typ Wydarzenia</TableHead>
                 <TableHead>Status Płatności</TableHead>
                 <TableHead>Status Dokumentu</TableHead>
                 <TableHead className="w-12">Akcje</TableHead>
@@ -374,7 +388,7 @@ export default function ParticipantsPage() {
             <TableBody>
               {filteredParticipants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12">
+                  <TableCell colSpan={7} className="text-center py-12">
                     <p className="text-muted-foreground">Nie znaleziono uczestników</p>
                   </TableCell>
                 </TableRow>
@@ -391,6 +405,13 @@ export default function ParticipantsPage() {
                       {participant.firstName} {participant.lastName}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{participant.email}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {participant.eventType === "choir" && "Chór"}
+                        {participant.eventType === "seminar" && "Seminarium"}
+                        {participant.eventType === "convention" && "Konwencja"}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       <button onClick={() => togglePaymentStatus(participant.id)} className="cursor-pointer">
                         {getPaymentBadge(participant.paymentStatus)}
@@ -490,6 +511,23 @@ export default function ParticipantsPage() {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="jan.kowalski@example.pl"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="eventType">Typ Wydarzenia</Label>
+              <Select
+                value={formData.eventType}
+                onValueChange={(value) => setFormData({ ...formData, eventType: value })}
+              >
+                <SelectTrigger id="eventType">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="choir">Chór</SelectItem>
+                  <SelectItem value="seminar">Seminarium</SelectItem>
+                  <SelectItem value="convention">Konwencja</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

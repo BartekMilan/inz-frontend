@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Search, MoreVertical, Plus, FileText, Edit, Mail, Trash2, CheckCircle2, Clock, XCircle } from "lucide-react"
+import { Search, MoreVertical, Plus, FileText, Edit, Mail, Trash2, CheckCircle2, Clock, XCircle, AlertTriangle } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
 
 // Mock data - Polish participants
@@ -127,6 +128,15 @@ export default function ParticipantsPage() {
   const [selectedRows, setSelectedRows] = useState([])
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [editingParticipant, setEditingParticipant] = useState(null)
+
+  // <CHANGE> Unified state for document generation
+  const [generationTargetIds, setGenerationTargetIds] = useState([])
+  const [selectedDocumentTypes, setSelectedDocumentTypes] = useState({
+    identyfikator: false,
+    koperta: false,
+    rachunek: false,
+  })
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -134,6 +144,7 @@ export default function ParticipantsPage() {
     eventType: "choir",
     paymentStatus: "Oczekuje",
   })
+
   const { toast } = useToast()
 
   // Filter participants based on search and event type
@@ -142,7 +153,6 @@ export default function ParticipantsPage() {
     const matchesSearch =
       fullName.includes(searchQuery.toLowerCase()) ||
       participant.email.toLowerCase().includes(searchQuery.toLowerCase())
-
     const matchesEventType = eventTypeFilter === "Wszystkie" || participant.eventType === eventTypeFilter
 
     return matchesSearch && matchesEventType
@@ -181,39 +191,72 @@ export default function ParticipantsPage() {
     })
   }
 
-  // Generate single PDF
-  const generatePDF = (participant) => {
-    toast({
-      title: "Generowanie PDF...",
-      description: `Tworzenie dokumentu dla ${participant.firstName} ${participant.lastName}`,
+  // <CHANGE> Open generation dialog for bulk action (selected rows)
+  const openGenerateDialogForBulk = () => {
+    if (selectedRows.length === 0) return
+    setGenerationTargetIds([...selectedRows])
+    setSelectedDocumentTypes({
+      identyfikator: false,
+      koperta: false,
+      rachunek: false,
     })
-
-    // Simulate API call
-    setTimeout(() => {
-      setParticipants((prev) => prev.map((p) => (p.id === participant.id ? { ...p, documentStatus: "Gotowy" } : p)))
-      toast({
-        title: "PDF wygenerowany!",
-        description: `Dokument dla ${participant.firstName} ${participant.lastName} jest gotowy`,
-      })
-    }, 1500)
   }
 
-  // Generate bulk PDFs
-  const generateBulkPDFs = () => {
-    const selectedParticipants = participants.filter((p) => selectedRows.includes(p.id))
+  // <CHANGE> Open generation dialog for single participant
+  const openGenerateDialogForSingle = (participantId) => {
+    setGenerationTargetIds([participantId])
+    setSelectedDocumentTypes({
+      identyfikator: false,
+      koperta: false,
+      rachunek: false,
+    })
+  }
 
+  // <CHANGE> Toggle document type selection
+  const toggleDocumentType = (type) => {
+    setSelectedDocumentTypes((prev) => ({
+      ...prev,
+      [type]: !prev[type],
+    }))
+  }
+
+  // <CHANGE> Check if any document type is selected
+  const hasSelectedDocumentTypes = Object.values(selectedDocumentTypes).some((value) => value)
+
+  // <CHANGE> Handle final confirmation from the dialog
+  const confirmGeneration = () => {
+    const count = generationTargetIds.length
+
+    // Get selected document type labels
+    const documentTypeLabels = {
+      identyfikator: "Identyfikatory",
+      koperta: "Koperty",
+      rachunek: "Rachunki",
+    }
+
+    const selectedTypes = Object.keys(selectedDocumentTypes)
+      .filter((key) => selectedDocumentTypes[key])
+      .map((key) => documentTypeLabels[key])
+      .join(", ")
+
+    // Close the dialog
+    setGenerationTargetIds([])
+
+    // Show toast notification
     toast({
-      title: "Generowanie PDF...",
-      description: `Tworzenie ${selectedParticipants.length} dokumentów`,
+      title: `Zlecono generowanie (${selectedTypes}) dla ${count} os.`,
+      description: count > 20 ? "Proces odbędzie się w tle" : "Pliki zostaną pobrane bezpośrednio",
     })
 
-    // Simulate API call
+    // Simulate the generation process (in real app, this would be an API call)
     setTimeout(() => {
-      setParticipants((prev) => prev.map((p) => (selectedRows.includes(p.id) ? { ...p, documentStatus: "Gotowy" } : p)))
+      setParticipants((prev) =>
+        prev.map((p) => (generationTargetIds.includes(p.id) ? { ...p, documentStatus: "Gotowy" } : p))
+      )
       setSelectedRows([])
       toast({
         title: "Dokumenty wygenerowane!",
-        description: `${selectedParticipants.length} PDF zostało utworzonych`,
+        description: `${count} dokumentów zostało utworzonych`,
       })
     }, 2000)
   }
@@ -306,10 +349,8 @@ export default function ParticipantsPage() {
         icon: Clock,
       },
     }
-
     const config = variants[status]
     const Icon = config.icon
-
     return (
       <Badge className={config.className}>
         <Icon className="mr-1 h-3 w-3" />
@@ -355,9 +396,9 @@ export default function ParticipantsPage() {
 
           {/* Right: Actions */}
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={generateBulkPDFs} disabled={selectedRows.length === 0}>
+            <Button variant="secondary" onClick={openGenerateDialogForBulk} disabled={selectedRows.length === 0}>
               <FileText className="mr-2 h-4 w-4" />
-              Generuj zaznaczone PDF ({selectedRows.length})
+              Generuj zaznaczone ({selectedRows.length})
             </Button>
             <Button onClick={openAddModal}>
               <Plus className="mr-2 h-4 w-4" />
@@ -439,9 +480,13 @@ export default function ParticipantsPage() {
                             <Edit className="mr-2 h-4 w-4" />
                             Edytuj dane
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => generatePDF(participant)} className="font-semibold">
+                          {/* <CHANGE> Updated single-row document generation */}
+                          <DropdownMenuItem
+                            onClick={() => openGenerateDialogForSingle(participant.id)}
+                            className="font-semibold"
+                          >
                             <FileText className="mr-2 h-4 w-4" />
-                            Generuj PDF
+                            Generuj dokumenty
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => sendEmail(participant)}>
                             <Mail className="mr-2 h-4 w-4" />
@@ -480,7 +525,6 @@ export default function ParticipantsPage() {
               {editingParticipant ? "Zaktualizuj dane uczestnika" : "Wprowadź dane nowego uczestnika"}
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="firstName">Imię</Label>
@@ -491,7 +535,6 @@ export default function ParticipantsPage() {
                 placeholder="Jan"
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="lastName">Nazwisko</Label>
               <Input
@@ -501,7 +544,6 @@ export default function ParticipantsPage() {
                 placeholder="Kowalski"
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -512,7 +554,6 @@ export default function ParticipantsPage() {
                 placeholder="jan.kowalski@example.pl"
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="eventType">Typ Wydarzenia</Label>
               <Select
@@ -529,7 +570,6 @@ export default function ParticipantsPage() {
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="paymentStatus">Status Płatności</Label>
               <Select
@@ -547,12 +587,96 @@ export default function ParticipantsPage() {
               </Select>
             </div>
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>
               Anuluj
             </Button>
             <Button onClick={saveParticipant}>{editingParticipant ? "Zapisz zmiany" : "Dodaj uczestnika"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* <CHANGE> Unified Document Generation Dialog with Multi-Select Checkboxes */}
+      <Dialog open={generationTargetIds.length > 0} onOpenChange={() => setGenerationTargetIds([])}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            {/* <CHANGE> Dynamic header based on count */}
+            <DialogTitle>
+              {generationTargetIds.length === 1
+                ? "Generowanie dokumentów dla 1 uczestnika"
+                : `Generowanie dokumentów dla ${generationTargetIds.length} uczestników`}
+            </DialogTitle>
+            <DialogDescription>Wybierz typy dokumentów i potwierdź operację</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* <CHANGE> Section 1: Document Type Selection with Checkboxes */}
+            <div className="space-y-3">
+              <Label className="text-base font-semibold">Typy dokumentów</Label>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="doc-identyfikator"
+                    checked={selectedDocumentTypes.identyfikator}
+                    onCheckedChange={() => toggleDocumentType("identyfikator")}
+                  />
+                  <Label htmlFor="doc-identyfikator" className="cursor-pointer font-normal">
+                    Identyfikatory
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="doc-koperta"
+                    checked={selectedDocumentTypes.koperta}
+                    onCheckedChange={() => toggleDocumentType("koperta")}
+                  />
+                  <Label htmlFor="doc-koperta" className="cursor-pointer font-normal">
+                    Koperty
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="doc-rachunek"
+                    checked={selectedDocumentTypes.rachunek}
+                    onCheckedChange={() => toggleDocumentType("rachunek")}
+                  />
+                  <Label htmlFor="doc-rachunek" className="cursor-pointer font-normal">
+                    Rachunki
+                  </Label>
+                </div>
+              </div>
+            </div>
+
+            {/* <CHANGE> Section 2: Summary & Safety Warning (Rule PF-W.4) */}
+            <div className="space-y-3">
+              <div className="rounded-lg border bg-muted/50 p-4">
+                <p className="text-sm font-medium">
+                  Wybrano uczestników: <span className="font-bold">{generationTargetIds.length}</span>
+                </p>
+              </div>
+
+              {/* <CHANGE> Conditional rendering based on count */}
+              {generationTargetIds.length <= 20 ? (
+                <p className="text-sm text-muted-foreground">Pliki zostaną pobrane bezpośrednio.</p>
+              ) : (
+                <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500" />
+                  <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+                    Wybrano dużą liczbę uczestników ({generationTargetIds.length}). Proces odbędzie się w tle.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGenerationTargetIds([])}>
+              Anuluj
+            </Button>
+            {/* <CHANGE> Validation: Disable if no document type selected */}
+            <Button onClick={confirmGeneration} disabled={!hasSelectedDocumentTypes}>
+              Zleć generowanie
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

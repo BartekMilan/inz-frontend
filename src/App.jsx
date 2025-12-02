@@ -8,12 +8,16 @@ import UsersPage from './pages/UserPage';
 import ParticipantsPage from './pages/ParticipantsPage';
 import ParticipantFormPage from './pages/ParticipantsFormPage';
 import SettingsPage from './pages/SettingsPage';
+import RegisterPage from './pages/RegisterPage';
+import PasswordResetPage from './pages/PasswordResetPage';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/password-reset" element={<PasswordResetPage />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route
           path="/*"

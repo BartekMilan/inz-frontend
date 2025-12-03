@@ -1,15 +1,21 @@
 "use client"
 
-import { useState } from "react"
-import { Link } from "react-router-dom"
+import { useState, useEffect } from "react"
+import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Chrome } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Chrome, Loader2, AlertCircle } from "lucide-react"
+import { useRegister, useGoogleLogin } from "@/hooks/use-auth"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function RegisterPage() {
+  const navigate = useNavigate()
+  const { isAuthenticated } = useAuth()
+  const [error, setError] = useState("")
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -19,16 +25,52 @@ export default function RegisterPage() {
     acceptTerms: false,
   })
 
+  const registerMutation = useRegister()
+  const googleLoginMutation = useGoogleLogin()
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/participants', { replace: true })
+    }
+  }, [isAuthenticated, navigate])
+
   const handleSubmit = (e) => {
     e.preventDefault()
-    console.log("[v0] Registration form submitted:", formData)
-    // Add registration logic here
+    setError("")
+
+    // Validate passwords match
+    if (formData.password !== formData.confirmPassword) {
+      setError("Hasła nie są takie same")
+      return
+    }
+
+    // Validate password length
+    if (formData.password.length < 6) {
+      setError("Hasło musi mieć minimum 6 znaków")
+      return
+    }
+
+    // Validate terms accepted
+    if (!formData.acceptTerms) {
+      setError("Musisz zaakceptować regulamin")
+      return
+    }
+
+    registerMutation.mutate({
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      password: formData.password,
+    })
   }
 
   const handleGoogleSignUp = () => {
-    console.log("[v0] Google sign up clicked")
-    // Add Google OAuth logic here
+    setError("")
+    googleLoginMutation.mutate()
   }
+
+  const isLoading = registerMutation.isPending || googleLoginMutation.isPending
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -38,6 +80,13 @@ export default function RegisterPage() {
           <CardDescription className="text-center">Utwórz konto, aby zacząć zarządzać wydarzeniami.</CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* First Name and Last Name Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -48,6 +97,7 @@ export default function RegisterPage() {
                   type="text"
                   placeholder="Jan"
                   required
+                  disabled={isLoading}
                   value={formData.firstName}
                   onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                 />
@@ -59,6 +109,7 @@ export default function RegisterPage() {
                   type="text"
                   placeholder="Kowalski"
                   required
+                  disabled={isLoading}
                   value={formData.lastName}
                   onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                 />
@@ -73,6 +124,7 @@ export default function RegisterPage() {
                 type="email"
                 placeholder="jan.kowalski@example.com"
                 required
+                disabled={isLoading}
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               />
@@ -86,9 +138,11 @@ export default function RegisterPage() {
                 type="password"
                 placeholder="••••••••"
                 required
+                disabled={isLoading}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               />
+              <p className="text-xs text-muted-foreground">Minimum 6 znaków</p>
             </div>
 
             {/* Confirm Password */}
@@ -99,6 +153,7 @@ export default function RegisterPage() {
                 type="password"
                 placeholder="••••••••"
                 required
+                disabled={isLoading}
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
               />
@@ -109,6 +164,7 @@ export default function RegisterPage() {
               <Checkbox
                 id="terms"
                 checked={formData.acceptTerms}
+                disabled={isLoading}
                 onCheckedChange={(checked) => setFormData({ ...formData, acceptTerms: checked })}
               />
               <label
@@ -120,8 +176,15 @@ export default function RegisterPage() {
             </div>
 
             {/* Sign Up Button */}
-            <Button type="submit" className="w-full">
-              Zarejestruj się
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {registerMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Rejestracja...
+                </>
+              ) : (
+                "Zarejestruj się"
+              )}
             </Button>
 
             {/* Divider */}
@@ -135,9 +198,24 @@ export default function RegisterPage() {
             </div>
 
             {/* Google Sign Up Button */}
-            <Button type="button" variant="outline" className="w-full bg-transparent" onClick={handleGoogleSignUp}>
-              <Chrome className="mr-2 h-4 w-4" />
-              Zarejestruj przez Google
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="w-full bg-transparent" 
+              onClick={handleGoogleSignUp}
+              disabled={isLoading}
+            >
+              {googleLoginMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Przekierowywanie...
+                </>
+              ) : (
+                <>
+                  <Chrome className="mr-2 h-4 w-4" />
+                  Zarejestruj przez Google
+                </>
+              )}
             </Button>
           </form>
         </CardContent>

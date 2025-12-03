@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { Menu, Users, Contact, UserPlus, Settings, LogOut, User, Hexagon } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -17,12 +17,17 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/AuthContext"
+import { useLogout } from "@/hooks/use-auth"
+import { Role } from "@/lib/roles"
 
+// Navigation items with role-based access
+// roles: array of roles that can access this item (empty = all authenticated users)
 const navigationItems = [
-  { label: "Zespół", icon: Users, href: "/users" },
-  { label: "Uczestnicy", icon: Contact, href: "/participants" },
-  { label: "Dodaj uczestnika", icon: UserPlus, href: "/participants/new" },
-  { label: "Ustawienia", icon: Settings, href: "/settings" },
+  { label: "Zespół", icon: Users, href: "/users", roles: [Role.ADMIN] },
+  { label: "Uczestnicy", icon: Contact, href: "/participants", roles: [Role.ADMIN, Role.REGISTRAR] },
+  { label: "Dodaj uczestnika", icon: UserPlus, href: "/participants/new", roles: [Role.ADMIN, Role.REGISTRAR] },
+  { label: "Ustawienia", icon: Settings, href: "/settings", roles: [Role.ADMIN] },
 ]
 
 function NavItem({ item, isActive, onClick }) {
@@ -43,7 +48,7 @@ function NavItem({ item, isActive, onClick }) {
   )
 }
 
-function SidebarContent({ activeRoute, onNavigate }) {
+function SidebarContent({ activeRoute, onNavigate, filteredNavItems }) {
   return (
     <div className="flex flex-col h-full bg-muted/40">
       {/* Branding */}
@@ -58,7 +63,7 @@ function SidebarContent({ activeRoute, onNavigate }) {
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-1">
-        {navigationItems.map((item) => (
+        {filteredNavItems.map((item) => (
           <NavItem key={item.href} item={item} isActive={activeRoute === item.href} onClick={onNavigate} />
         ))}
       </nav>
@@ -70,18 +75,47 @@ function DashboardLayout({ children }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { user, userRole, checkRole } = useAuth()
+  const logoutMutation = useLogout()
 
   const activeRoute = location.pathname
   const isActive = (path) => location.pathname.startsWith(path)
+
+  // Filter navigation items based on user role
+  const filteredNavItems = useMemo(() => {
+    return navigationItems.filter((item) => {
+      // If no roles specified, allow all authenticated users
+      if (!item.roles || item.roles.length === 0) {
+        return true;
+      }
+      // Check if user has one of the required roles
+      return checkRole(item.roles);
+    });
+  }, [checkRole]);
 
   const handleNavigate = (href) => {
     navigate(href)
     setMobileOpen(false)
   }
 
+  const handleLogout = () => {
+    logoutMutation.mutate()
+  }
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (user?.user_metadata?.first_name && user?.user_metadata?.last_name) {
+      return `${user.user_metadata.first_name[0]}${user.user_metadata.last_name[0]}`.toUpperCase()
+    }
+    if (user?.email) {
+      return user.email[0].toUpperCase()
+    }
+    return 'U'
+  }
+
   // Get breadcrumb text based on current route
   const getBreadcrumb = () => {
-    const route = navigationItems.find((item) => isActive(item.href))
+    const route = filteredNavItems.find((item) => isActive(item.href))
     return route ? route.label : "Dashboard"
   }
 
@@ -89,13 +123,13 @@ function DashboardLayout({ children }) {
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col border-r border-border">
-        <SidebarContent activeRoute={activeRoute} onNavigate={handleNavigate} />
+        <SidebarContent activeRoute={activeRoute} onNavigate={handleNavigate} filteredNavItems={filteredNavItems} />
       </aside>
 
       {/* Mobile Sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-64 p-0 border-border">
-          <SidebarContent activeRoute={activeRoute} onNavigate={handleNavigate} />
+          <SidebarContent activeRoute={activeRoute} onNavigate={handleNavigate} filteredNavItems={filteredNavItems} />
         </SheetContent>
       </Sheet>
 
@@ -141,17 +175,19 @@ function DashboardLayout({ children }) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full h-9 w-9 hover:bg-accent">
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">AD</AvatarFallback>
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
+                    {getUserInitials()}
+                  </AvatarFallback>
                 </Avatar>
                 <span className="sr-only">User menu</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/settings')}>
                 <User className="mr-2 h-4 w-4" />
                 <span>Profil</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Wyloguj</span>
               </DropdownMenuItem>

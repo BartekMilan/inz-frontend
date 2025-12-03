@@ -6,22 +6,23 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Mail } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ArrowLeft, Mail, Loader2, AlertCircle } from "lucide-react"
+import { useResetPassword } from "@/hooks/use-auth"
 
 export default function PasswordResetPage() {
   const [email, setEmail] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  
+  const resetPasswordMutation = useResetPassword()
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    setIsSubmitting(true)
-
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false)
-      setIsSubmitted(true)
-    }, 1500)
+    resetPasswordMutation.mutate(email, {
+      onSuccess: () => {
+        setIsSubmitted(true)
+      }
+    })
   }
 
   if (isSubmitted) {
@@ -67,6 +68,14 @@ export default function PasswordResetPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4 mb-6">
+            {resetPasswordMutation.isError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {resetPasswordMutation.error?.response?.data?.message || "Nie udało się wysłać emaila"}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium text-slate-700">
                 Adres e-mail
@@ -79,7 +88,7 @@ export default function PasswordResetPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full"
-                disabled={isSubmitting}
+                disabled={resetPasswordMutation.isPending}
               />
             </div>
           </CardContent>
@@ -87,9 +96,16 @@ export default function PasswordResetPage() {
             <Button
               type="submit"
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
-              disabled={isSubmitting}
+              disabled={resetPasswordMutation.isPending}
             >
-              {isSubmitting ? "Wysyłanie..." : "Wyślij link resetujący"}
+              {resetPasswordMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Wysyłanie...
+                </>
+              ) : (
+                "Wyślij link resetujący"
+              )}
             </Button>
             <Link
               to="/login"

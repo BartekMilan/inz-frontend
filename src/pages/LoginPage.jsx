@@ -1,28 +1,54 @@
 "use client"
 
-import { useState } from "react"
-import { useNavigate, Link } from "react-router-dom"
+import { useState, useEffect } from "react"
+import { useNavigate, Link, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Mail } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Mail, Loader2, AlertCircle } from "lucide-react"
+import { useLogin, useGoogleLogin } from "@/hooks/use-auth"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const { isAuthenticated } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+
+  const loginMutation = useLogin()
+  const googleLoginMutation = useGoogleLogin()
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      const from = location.state?.from?.pathname || '/participants'
+      navigate(from, { replace: true })
+    }
+  }, [isAuthenticated, navigate, location])
+
+  // Check for OAuth error in location state
+  useEffect(() => {
+    if (location.state?.error) {
+      setError(location.state.error)
+    }
+  }, [location.state])
 
   const handleSignIn = (e) => {
     e.preventDefault()
-    // Handle email/password sign in logic here
-    console.log("[v0] Sign in with:", { email, password })
+    setError("")
+    loginMutation.mutate({ email, password })
   }
 
   const handleGoogleSignIn = () => {
-    // Handle Google sign in logic here
-    console.log("[v0] Sign in with Google")
+    setError("")
+    googleLoginMutation.mutate()
   }
+
+  const isLoading = loginMutation.isPending || googleLoginMutation.isPending
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
@@ -33,6 +59,13 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent className="space-y-6">
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           <form onSubmit={handleSignIn} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Adres e-mail</Label>
@@ -42,6 +75,7 @@ export default function LoginPage() {
                 placeholder="imie.nazwisko@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
                 required
               />
             </div>
@@ -53,6 +87,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
                 required
               />
             </div>
@@ -66,8 +101,15 @@ export default function LoginPage() {
               </Link>
             </div>
 
-            <Button type="submit" className="w-full">
-              Zaloguj się
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {loginMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Logowanie...
+                </>
+              ) : (
+                "Zaloguj się"
+              )}
             </Button>
           </form>
 
@@ -80,9 +122,24 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <Button type="button" variant="outline" className="w-full bg-transparent" onClick={handleGoogleSignIn}>
-            <Mail className="mr-2 h-4 w-4" />
-            Zaloguj przez Google
+          <Button 
+            type="button" 
+            variant="outline" 
+            className="w-full bg-transparent" 
+            onClick={handleGoogleSignIn}
+            disabled={isLoading}
+          >
+            {googleLoginMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Przekierowywanie...
+              </>
+            ) : (
+              <>
+                <Mail className="mr-2 h-4 w-4" />
+                Zaloguj przez Google
+              </>
+            )}
           </Button>
         </CardContent>
 

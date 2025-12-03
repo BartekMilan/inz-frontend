@@ -6,7 +6,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import LoginPage from './pages/LoginPage';
 import UsersPage from './pages/UserPage';
 import ParticipantsPage from './pages/ParticipantsPage';
-import ParticipantFormPage from './pages/ParticipantsFormPage';
+import ParticipantFormPage from './pages/ParticipantFormPage';
 import SettingsPage from './pages/SettingsPage';
 import RegisterPage from './pages/RegisterPage';
 import PasswordResetPage from './pages/PasswordResetPage';

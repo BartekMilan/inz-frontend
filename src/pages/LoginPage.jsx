@@ -10,11 +10,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Mail, Loader2, AlertCircle } from "lucide-react"
 import { useLogin, useGoogleLogin } from "@/hooks/use-auth"
 import { useAuth } from "@/contexts/AuthContext"
+import { Role } from "@/lib/roles"
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, userRole } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -25,10 +26,12 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      const from = location.state?.from?.pathname || '/participants'
+      // Get redirect path based on role
+      const defaultPath = userRole === Role.ADMIN ? '/users' : '/participants'
+      const from = location.state?.from?.pathname || defaultPath
       navigate(from, { replace: true })
     }
-  }, [isAuthenticated, navigate, location])
+  }, [isAuthenticated, userRole, navigate, location])
 
   // Check for OAuth error in location state
   useEffect(() => {

@@ -13,13 +13,13 @@ export function AuthProvider({ children }) {
 
   // Get user role from user object
   const getUserRole = useCallback((userData) => {
-    // Profile response has role directly
-    if (userData?.role) {
-      return userData.role;
-    }
-    // Supabase user object has role in user_metadata
+    // Supabase user object has role in user_metadata (check this first!)
     if (userData?.user_metadata?.role) {
       return userData.user_metadata.role;
+    }
+    // Profile response from backend has role directly
+    if (userData?.role && userData.role !== 'authenticated') {
+      return userData.role;
     }
     // Default to registrar
     return Role.REGISTRAR;

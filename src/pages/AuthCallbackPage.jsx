@@ -1,12 +1,23 @@
 import { useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useOAuthCallback } from '../hooks/use-auth';
+import { useAuth } from '../contexts/AuthContext';
+import { Role } from '../lib/roles';
 import { Loader2 } from 'lucide-react';
 
 export default function AuthCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { isAuthenticated, userRole } = useAuth();
   const { mutate: exchangeCode, isPending } = useOAuthCallback();
+
+  // Redirect when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      const defaultPath = userRole === Role.ADMIN ? '/users' : '/participants';
+      navigate(defaultPath, { replace: true });
+    }
+  }, [isAuthenticated, userRole, navigate]);
 
   useEffect(() => {
     const code = searchParams.get('code');

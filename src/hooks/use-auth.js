@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../services/auth.service';
@@ -7,7 +7,6 @@ import { useToast } from './use-toast';
 // Login mutation hook
 export function useLogin() {
   const { login } = useAuth();
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   return useMutation({
@@ -17,7 +16,8 @@ export function useLogin() {
         title: 'Zalogowano pomyślnie',
         description: 'Witaj ponownie!',
       });
-      navigate('/participants');
+      // Navigation is handled by useEffect in LoginPage based on isAuthenticated state change
+      // This ensures the auth state is fully updated before redirect
     },
     onError: (error) => {
       toast({
@@ -151,7 +151,7 @@ export function useOAuthCallback() {
         title: 'Zalogowano pomyślnie',
         description: 'Witaj!',
       });
-      navigate('/participants');
+      // Navigation will be handled by AuthCallbackPage based on isAuthenticated state change
     },
     onError: (error) => {
       toast({

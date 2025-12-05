@@ -3,10 +3,22 @@ import { useAuth } from '../contexts/AuthContext';
 import { Loader2, ShieldX } from 'lucide-react';
 
 export default function ProtectedRoute({ children, allowedRoles }) {
-  const { isAuthenticated, isLoading, checkRole } = useAuth();
+  const { isAuthenticated, isLoading, checkRole, user, userRole } = useAuth();
   const location = useLocation();
 
-  if (isLoading) {
+  // Debug logging
+  console.log('ProtectedRoute render:', { 
+    isLoading, 
+    isAuthenticated, 
+    user: !!user, 
+    userRole, 
+    allowedRoles,
+    checkRoleResult: allowedRoles ? checkRole(allowedRoles) : 'no roles specified',
+    path: location.pathname
+  });
+
+  // Show loading while auth is initializing OR when authenticated but user data not yet available
+  if (isLoading || (isAuthenticated && !user)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">

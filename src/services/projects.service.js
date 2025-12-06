@@ -1,0 +1,170 @@
+import apiClient from '../lib/api';
+
+export const projectsApi = {
+  /**
+   * Pobiera rolę systemową użytkownika (admin/registrar)
+   * @returns {Promise<{role: string}>}
+   */
+  getUserRole: async () => {
+    const response = await apiClient.get('/projects/me/role');
+    return response.data;
+  },
+
+  /**
+   * Pobiera listę wszystkich projektów użytkownika
+   * @returns {Promise<{projects: Array, total: number}>}
+   */
+  getProjects: async () => {
+    const response = await apiClient.get('/projects');
+    return response.data;
+  },
+
+  /**
+   * Pobiera szczegóły pojedynczego projektu
+   * @param {string} projectId - ID projektu
+   * @returns {Promise<Object>}
+   */
+  getProject: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}`);
+    return response.data;
+  },
+
+  /**
+   * Tworzy nowy projekt
+   * @param {Object} data - Dane projektu
+   * @param {string} data.name - Nazwa projektu
+   * @param {string} [data.description] - Opis projektu
+   * @returns {Promise<Object>}
+   */
+  createProject: async (data) => {
+    const response = await apiClient.post('/projects', data);
+    return response.data;
+  },
+
+  /**
+   * Aktualizuje projekt
+   * @param {string} projectId - ID projektu
+   * @param {Object} data - Dane do aktualizacji
+   * @returns {Promise<Object>}
+   */
+  updateProject: async (projectId, data) => {
+    const response = await apiClient.put(`/projects/${projectId}`, data);
+    return response.data;
+  },
+
+  /**
+   * Usuwa projekt
+   * @param {string} projectId - ID projektu
+   * @returns {Promise<void>}
+   */
+  deleteProject: async (projectId) => {
+    await apiClient.delete(`/projects/${projectId}`);
+  },
+
+  // =====================================================
+  // PROJECT MEMBERS
+  // =====================================================
+
+  /**
+   * Pobiera członków projektu
+   * @param {string} projectId - ID projektu
+   * @returns {Promise<Array>}
+   */
+  getProjectMembers: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/members`);
+    return response.data;
+  },
+
+  /**
+   * Dodaje członka do projektu
+   * @param {string} projectId - ID projektu
+   * @param {Object} data - Dane członka
+   * @returns {Promise<Object>}
+   */
+  addProjectMember: async (projectId, data) => {
+    const response = await apiClient.post(`/projects/${projectId}/members`, data);
+    return response.data;
+  },
+
+  /**
+   * Aktualizuje rolę członka
+   * @param {string} projectId - ID projektu
+   * @param {string} memberId - ID członkostwa
+   * @param {Object} data - Nowa rola
+   * @returns {Promise<Object>}
+   */
+  updateProjectMember: async (projectId, memberId, data) => {
+    const response = await apiClient.put(`/projects/${projectId}/members/${memberId}`, data);
+    return response.data;
+  },
+
+  /**
+   * Usuwa członka z projektu
+   * @param {string} projectId - ID projektu
+   * @param {string} memberId - ID członkostwa
+   * @returns {Promise<void>}
+   */
+  removeProjectMember: async (projectId, memberId) => {
+    await apiClient.delete(`/projects/${projectId}/members/${memberId}`);
+  },
+
+  // =====================================================
+  // FIELD DEFINITIONS
+  // =====================================================
+
+  /**
+   * Pobiera definicje pól dla projektu
+   * @param {string} projectId - ID projektu
+   * @returns {Promise<Array>}
+   */
+  getFieldDefinitions: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/fields`);
+    return response.data;
+  },
+
+  /**
+   * Tworzy definicję pola
+   * @param {string} projectId - ID projektu
+   * @param {Object} data - Dane pola
+   * @returns {Promise<Object>}
+   */
+  createFieldDefinition: async (projectId, data) => {
+    const response = await apiClient.post(`/projects/${projectId}/fields`, data);
+    return response.data;
+  },
+
+  /**
+   * Tworzy wiele definicji pól naraz
+   * @param {string} projectId - ID projektu
+   * @param {Array} fields - Tablica definicji pól
+   * @returns {Promise<Array>}
+   */
+  bulkCreateFieldDefinitions: async (projectId, fields) => {
+    const response = await apiClient.post(`/projects/${projectId}/fields/bulk`, { fields });
+    return response.data;
+  },
+
+  /**
+   * Aktualizuje definicję pola
+   * @param {string} projectId - ID projektu
+   * @param {string} fieldId - ID pola
+   * @param {Object} data - Dane do aktualizacji
+   * @returns {Promise<Object>}
+   */
+  updateFieldDefinition: async (projectId, fieldId, data) => {
+    const response = await apiClient.put(`/projects/${projectId}/fields/${fieldId}`, data);
+    return response.data;
+  },
+
+  /**
+   * Usuwa definicję pola
+   * @param {string} projectId - ID projektu
+   * @param {string} fieldId - ID pola
+   * @returns {Promise<void>}
+   */
+  deleteFieldDefinition: async (projectId, fieldId) => {
+    await apiClient.delete(`/projects/${projectId}/fields/${fieldId}`);
+  },
+};
+
+export default projectsApi;

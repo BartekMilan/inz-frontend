@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import { AuthProvider } from './contexts/AuthContext';
+import { ProjectProvider } from './contexts/ProjectContext';
 import { Toaster } from './components/ui/toaster';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
@@ -42,59 +43,61 @@ function App() {
             path="/*"
             element={
               <ProtectedRoute>
-                <DashboardLayout>
-                  <Routes>
-                    {/* Admin only routes */}
-                    <Route 
-                      path="/users" 
-                      element={
-                        <RoleProtectedRoute allowedRoles={[Role.ADMIN]}>
-                          <UsersPage />
-                        </RoleProtectedRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/settings" 
-                      element={
-                        <RoleProtectedRoute allowedRoles={[Role.ADMIN]}>
-                          <SettingsPage />
-                        </RoleProtectedRoute>
-                      } 
-                    />
-                    
-                    {/* Admin and Registrar routes */}
-                    <Route 
-                      path="/participants" 
-                      element={
-                        <RoleProtectedRoute allowedRoles={[Role.ADMIN, Role.REGISTRAR]}>
-                          <ParticipantsPage />
-                        </RoleProtectedRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/participants/new" 
-                      element={
-                        <RoleProtectedRoute allowedRoles={[Role.ADMIN, Role.REGISTRAR]}>
-                          <ParticipantFormPage />
-                        </RoleProtectedRoute>
-                      } 
-                    />
-                    <Route 
-                      path="/participants/edit/:id" 
-                      element={
-                        <RoleProtectedRoute allowedRoles={[Role.ADMIN, Role.REGISTRAR]}>
-                          <ParticipantFormPage />
-                        </RoleProtectedRoute>
-                      } 
-                    />
-                    
-                    {/* Default redirect for authenticated users based on role */}
-                    <Route path="/" element={<Navigate to="/participants" replace />} />
-                    
-                    {/* 404 inside dashboard */}
-                    <Route path="*" element={<Navigate to="/participants" replace />} />
-                  </Routes>
-                </DashboardLayout>
+                <ProjectProvider>
+                  <DashboardLayout>
+                    <Routes>
+                      {/* Admin only routes */}
+                      <Route 
+                        path="/users" 
+                        element={
+                          <RoleProtectedRoute allowedRoles={[Role.ADMIN]}>
+                            <UsersPage />
+                          </RoleProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/settings" 
+                        element={
+                          <RoleProtectedRoute allowedRoles={[Role.ADMIN]}>
+                            <SettingsPage />
+                          </RoleProtectedRoute>
+                        } 
+                      />
+                      
+                      {/* Admin and Registrar routes */}
+                      <Route 
+                        path="/participants" 
+                        element={
+                          <RoleProtectedRoute allowedRoles={[Role.ADMIN, Role.REGISTRAR]}>
+                            <ParticipantsPage />
+                          </RoleProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/participants/new" 
+                        element={
+                          <RoleProtectedRoute allowedRoles={[Role.ADMIN, Role.REGISTRAR]}>
+                            <ParticipantFormPage />
+                          </RoleProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/participants/edit/:id" 
+                        element={
+                          <RoleProtectedRoute allowedRoles={[Role.ADMIN, Role.REGISTRAR]}>
+                            <ParticipantFormPage />
+                          </RoleProtectedRoute>
+                        } 
+                      />
+                      
+                      {/* Default redirect for authenticated users based on role */}
+                      <Route path="/" element={<Navigate to="/participants" replace />} />
+                      
+                      {/* 404 inside dashboard */}
+                      <Route path="*" element={<Navigate to="/participants" replace />} />
+                    </Routes>
+                  </DashboardLayout>
+                </ProjectProvider>
               </ProtectedRoute>
             }
           />

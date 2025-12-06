@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { useProject } from "@/contexts/ProjectContext"
+import { useParticipants } from "@/hooks/use-participants"
 import {
   Search,
   MoreVertical,
@@ -1401,6 +1403,11 @@ function BooleanCell({ value, positive = true }) {
 
 export default function ParticipantsPage() {
   const navigate = useNavigate()
+  const { selectedProjectId, selectedProject } = useProject()
+  const { data: apiParticipants, isLoading: isLoadingParticipants } = useParticipants()
+  
+  // Use API data if available, otherwise fall back to mock data for now
+  // TODO: Remove mock data fallback when backend API is ready
   const [participants, setParticipants] = useState(initialParticipants)
   const [searchQuery, setSearchQuery] = useState("")
   const [eventTypeFilter, setEventTypeFilter] = useState("Wszystkie")
@@ -1422,6 +1429,29 @@ export default function ParticipantsPage() {
   })
 
   const { toast } = useToast()
+
+  // Update participants when API data is available
+  // TODO: Remove this when backend API is ready and returns actual data
+  useEffect(() => {
+    if (apiParticipants && apiParticipants.length > 0) {
+      setParticipants(apiParticipants)
+    }
+    // Note: For now, we keep using mock data until backend endpoint is implemented
+  }, [apiParticipants])
+
+  // Show message if no project is selected
+  if (!selectedProjectId) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Wybierz projekt, aby wyświetlić listę uczestników.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
 
   // Filter participants based on search and event type
   const filteredParticipants = participants.filter((participant) => {

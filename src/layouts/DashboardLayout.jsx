@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { Menu, Users, Contact, UserPlus, Settings, LogOut, User, Hexagon } from "lucide-react"
+import { Menu, Users, Contact, UserPlus, Settings, LogOut, User, Hexagon, FolderKanban } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -20,6 +20,8 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
 import { useLogout } from "@/hooks/use-auth"
 import { Role } from "@/lib/roles"
+import ProjectSwitcher from "@/components/ProjectSwitcher"
+import { useProject } from "@/contexts/ProjectContext"
 
 // Navigation items with role-based access
 // roles: array of roles that can access this item (empty = all authenticated users)
@@ -48,7 +50,7 @@ function NavItem({ item, isActive, onClick }) {
   )
 }
 
-function SidebarContent({ activeRoute, onNavigate, filteredNavItems }) {
+function SidebarContent({ activeRoute, onNavigate, filteredNavItems, isAdmin, selectedProject }) {
   return (
     <div className="flex flex-col h-full bg-muted/40">
       {/* Branding */}
@@ -60,6 +62,25 @@ function SidebarContent({ activeRoute, onNavigate, filteredNavItems }) {
       </div>
 
       <Separator className="bg-border/40" />
+
+      {/* Project Switcher (Admin only) or Project Name (Registrar) */}
+      {isAdmin ? (
+        <ProjectSwitcher className="pt-4" />
+      ) : selectedProject ? (
+        <div className="px-4 py-4">
+          <div className="flex items-center gap-3 px-3 py-2.5 bg-background rounded-lg shadow-sm">
+            <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10 text-primary">
+              <FolderKanban className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{selectedProject.name}</p>
+              <p className="text-xs text-muted-foreground">Twój projekt</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <Separator className="bg-border/40 mx-3" />
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-1">
@@ -76,6 +97,7 @@ function DashboardLayout({ children }) {
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const { user, userRole, checkRole } = useAuth()
+  const { isAdmin, selectedProject } = useProject()
   const logoutMutation = useLogout()
 
   const activeRoute = location.pathname
@@ -123,13 +145,13 @@ function DashboardLayout({ children }) {
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col border-r border-border">
-        <SidebarContent activeRoute={activeRoute} onNavigate={handleNavigate} filteredNavItems={filteredNavItems} />
+        <SidebarContent activeRoute={activeRoute} onNavigate={handleNavigate} filteredNavItems={filteredNavItems} isAdmin={isAdmin} selectedProject={selectedProject} />
       </aside>
 
       {/* Mobile Sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-64 p-0 border-border">
-          <SidebarContent activeRoute={activeRoute} onNavigate={handleNavigate} filteredNavItems={filteredNavItems} />
+          <SidebarContent activeRoute={activeRoute} onNavigate={handleNavigate} filteredNavItems={filteredNavItems} isAdmin={isAdmin} selectedProject={selectedProject} />
         </SheetContent>
       </Sheet>
 

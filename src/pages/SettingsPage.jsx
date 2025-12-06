@@ -40,10 +40,12 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { googleSheetsApi, parseGoogleSheetsError } from '@/services/google-sheets.service';
 import { useAuth } from '@/contexts/AuthContext';
+import { useProject } from '@/contexts/ProjectContext';
 
 export default function SettingsPage() {
   const { toast } = useToast();
   const { checkIsAdmin } = useAuth();
+  const { selectedProjectId } = useProject();
   const queryClient = useQueryClient();
   const isAdmin = checkIsAdmin();
 
@@ -53,19 +55,8 @@ export default function SettingsPage() {
   const [testInfo, setTestInfo] = useState(null);
   const [testError, setTestError] = useState(null);
 
-  // State for Templates
-  const [templates, setTemplates] = useState([
-    {
-      id: 1,
-      name: 'Identyfikator',
-      docId: '1a2b3c4d5e6f7g8h9i0j',
-    },
-    {
-      id: 2,
-      name: 'Certyfikat uczestnictwa',
-      docId: '9i8h7g6f5e4d3c2b1a0z',
-    },
-  ]);
+  // State for Templates - will be populated from API
+  const [templates, setTemplates] = useState([]);
 
   // State for New Template Form
   const [newTemplateName, setNewTemplateName] = useState('');
@@ -80,25 +71,60 @@ export default function SettingsPage() {
     enabled: isAdmin,
   });
 
-  // Query: Get current sheet configuration
+  // Query: Get current sheet configuration for selected project
   const {
     data: configData,
     isLoading: isLoadingConfig,
     error: configError,
     refetch: refetchConfig,
   } = useQuery({
-    queryKey: ['sheetConfiguration'],
-    queryFn: googleSheetsApi.getConfiguration,
+    queryKey: ['sheetConfiguration', selectedProjectId],
+    queryFn: () => googleSheetsApi.getProjectConfiguration(selectedProjectId),
     retry: 1,
     staleTime: 30000, // 30 seconds
+    enabled: !!selectedProjectId, // Only fetch if project is selected
+  });
+
+  // Query: Get document templates for selected project
+  const {
+    data: templatesData,
+    isLoading: isLoadingTemplates,
+    refetch: refetchTemplates,
+  } = useQuery({
+    queryKey: ['documentTemplates', selectedProjectId],
+    queryFn: () => googleSheetsApi.getProjectTemplates(selectedProjectId),
+    retry: 1,
+    staleTime: 30000, // 30 seconds
+    enabled: !!selectedProjectId, // Only fetch if project is selected
   });
 
   // Populate sheetUrl from saved configuration
   useEffect(() => {
     if (configData?.configured && configData?.config?.sheetUrl) {
       setSheetUrl(configData.config.sheetUrl);
+    } else if (configData?.configured === false) {
+      // No configuration exists for this project, clear the field
+      setSheetUrl('');
     }
-  }, [configData]);
+  }, [configData, selectedProjectId]);
+
+  // Populate templates from API
+  useEffect(() => {
+    if (templatesData) {
+      setTemplates(templatesData);
+    } else {
+      setTemplates([]);
+    }
+  }, [templatesData, selectedProjectId]);
+
+  // Clear form fields when project changes
+  useEffect(() => {
+    setNewTemplateName('');
+    setNewTemplateDocId('');
+    setTestResult(null);
+    setTestInfo(null);
+    setTestError(null);
+  }, [selectedProjectId]);
 
   // Copy Service Account email to clipboard
   const copyServiceAccountEmail = () => {
@@ -136,16 +162,16 @@ export default function SettingsPage() {
     },
   });
 
-  // Mutation: Connect (save) sheet
+  // Mutation: Connect (save) sheet for project
   const connectSheetMutation = useMutation({
-    mutationFn: (url) => googleSheetsApi.connectSheet(url),
+    mutationFn: (url) => googleSheetsApi.connectProjectSheet(selectedProjectId, url),
     onSuccess: (data) => {
       toast({
         title: 'Arkusz podłączony',
         description: data.message || 'Konfiguracja została zapisana',
       });
-      // Refresh configuration
-      queryClient.invalidateQueries({ queryKey: ['sheetConfiguration'] });
+      // Refresh configuration for current project
+      queryClient.invalidateQueries({ queryKey: ['sheetConfiguration', selectedProjectId] });
       setTestResult('success');
       setTestInfo({
         sheetId: data.sheetId,
@@ -175,27 +201,69 @@ export default function SettingsPage() {
 
   // Handle Save/Connect Sheet
   const handleConnectSheet = () => {
-    if (!sheetUrl.trim()) return;
+    if (!sheetUrl.trim() || !selectedProjectId) return;
     connectSheetMutation.mutate(sheetUrl.trim());
   };
 
-  // Handle Add Template
-  const handleAddTemplate = () => {
-    if (newTemplateName.trim() && newTemplateDocId.trim()) {
-      const newTemplate = {
-        id: Date.now(),
-        name: newTemplateName,
-        docId: newTemplateDocId,
-      };
-      setTemplates([...templates, newTemplate]);
+  // Mutation: Create template
+  const createTemplateMutation = useMutation({
+    mutationFn: ({ name, docId }) =>
+      googleSheetsApi.createProjectTemplate(selectedProjectId, name, docId),
+    onSuccess: () => {
+      toast({
+        title: 'Szablon dodany',
+        description: 'Szablon został pomyślnie dodany',
+      });
+      queryClient.invalidateQueries({ queryKey: ['documentTemplates', selectedProjectId] });
       setNewTemplateName('');
       setNewTemplateDocId('');
+    },
+    onError: (error) => {
+      const errorMessage = parseGoogleSheetsError(error);
+      toast({
+        variant: 'destructive',
+        title: 'Błąd',
+        description: errorMessage,
+      });
+    },
+  });
+
+  // Mutation: Delete template
+  const deleteTemplateMutation = useMutation({
+    mutationFn: (templateId) =>
+      googleSheetsApi.deleteProjectTemplate(selectedProjectId, templateId),
+    onSuccess: () => {
+      toast({
+        title: 'Szablon usunięty',
+        description: 'Szablon został pomyślnie usunięty',
+      });
+      queryClient.invalidateQueries({ queryKey: ['documentTemplates', selectedProjectId] });
+    },
+    onError: (error) => {
+      const errorMessage = parseGoogleSheetsError(error);
+      toast({
+        variant: 'destructive',
+        title: 'Błąd',
+        description: errorMessage,
+      });
+    },
+  });
+
+  // Handle Add Template
+  const handleAddTemplate = () => {
+    if (newTemplateName.trim() && newTemplateDocId.trim() && selectedProjectId) {
+      createTemplateMutation.mutate({
+        name: newTemplateName.trim(),
+        docId: newTemplateDocId.trim(),
+      });
     }
   };
 
   // Handle Delete Template
   const handleDeleteTemplate = (id) => {
-    setTemplates(templates.filter((template) => template.id !== id));
+    if (selectedProjectId) {
+      deleteTemplateMutation.mutate(id);
+    }
   };
 
   // Check if sheet URL has changed from saved config
@@ -207,6 +275,8 @@ export default function SettingsPage() {
   // Determine connection status
   const isTesting = testConnectionMutation.isPending;
   const isSaving = connectSheetMutation.isPending;
+  const isCreatingTemplate = createTemplateMutation.isPending;
+  const isDeletingTemplate = deleteTemplateMutation.isPending;
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-5xl">
@@ -408,6 +478,7 @@ export default function SettingsPage() {
                   onClick={handleConnectSheet}
                   disabled={
                     !sheetUrl.trim() ||
+                    !selectedProjectId ||
                     isTesting ||
                     isSaving ||
                     testResult !== 'success'
@@ -442,50 +513,63 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nazwa Szablonu</TableHead>
-                  <TableHead>Google Doc ID</TableHead>
-                  <TableHead className="w-[100px] text-right">
-                    Akcje
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {templates.length === 0 ? (
+            {isLoadingTemplates && (
+              <div className="flex items-center gap-2 text-muted-foreground py-4">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Ładowanie szablonów...</span>
+              </div>
+            )}
+            {!isLoadingTemplates && (
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell
-                      colSpan={3}
-                      className="text-center text-muted-foreground py-8"
-                    >
-                      Brak zdefiniowanych szablonów
-                    </TableCell>
+                    <TableHead>Nazwa Szablonu</TableHead>
+                    <TableHead>Google Doc ID</TableHead>
+                    <TableHead className="w-[100px] text-right">
+                      Akcje
+                    </TableHead>
                   </TableRow>
-                ) : (
-                  templates.map((template) => (
-                    <TableRow key={template.id}>
-                      <TableCell className="font-medium">
-                        {template.name}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm text-muted-foreground">
-                        {template.docId}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteTemplate(template.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                </TableHeader>
+                <TableBody>
+                  {templates.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={3}
+                        className="text-center text-muted-foreground py-8"
+                      >
+                        Brak zdefiniowanych szablonów
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    templates.map((template) => (
+                      <TableRow key={template.id}>
+                        <TableCell className="font-medium">
+                          {template.name}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm text-muted-foreground">
+                          {template.docId}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteTemplate(template.id)}
+                            disabled={isDeletingTemplate || !isAdmin}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            {isDeletingTemplate ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
 
           <Separator />
@@ -523,11 +607,26 @@ export default function SettingsPage() {
               </div>
               <Button
                 onClick={handleAddTemplate}
-                disabled={!newTemplateName.trim() || !newTemplateDocId.trim()}
+                disabled={
+                  !newTemplateName.trim() ||
+                  !newTemplateDocId.trim() ||
+                  !selectedProjectId ||
+                  isCreatingTemplate ||
+                  !isAdmin
+                }
                 className="w-full md:w-auto"
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Dodaj szablon
+                {isCreatingTemplate ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Dodawanie...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Dodaj szablon
+                  </>
+                )}
               </Button>
             </div>
           </CardFooter>

@@ -3,21 +3,36 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../services/auth.service';
 import { useToast } from './use-toast';
+import { Role } from '../lib/roles';
 
 // Login mutation hook
 export function useLogin() {
   const { login } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   return useMutation({
     mutationFn: ({ email, password }) => login(email, password),
-    onSuccess: () => {
+    onSuccess: (response) => {
+      // Get user role from response
+      const userRole = response.user?.user_metadata?.role || response.user?.role;
+      
+      // For registrars, redirect to participants page
+      // The assignedProjectId is already stored in localStorage by AuthContext
+      // ProjectContext will automatically initialize from localStorage when it mounts
+      if (userRole === Role.REGISTRAR && response.user?.assignedProjectId) {
+        // Redirect to participants page immediately
+        // ProjectContext will be available there and will initialize from localStorage
+        navigate('/participants', { replace: true });
+      }
+
       toast({
         title: 'Zalogowano pomyślnie',
         description: 'Witaj ponownie!',
       });
-      // Navigation is handled by useEffect in LoginPage based on isAuthenticated state change
-      // This ensures the auth state is fully updated before redirect
+      
+      // For non-registrars, navigation is handled by useEffect in LoginPage
+      // based on isAuthenticated state change
     },
     onError: (error) => {
       toast({
@@ -146,12 +161,26 @@ export function useOAuthCallback() {
 
   return useMutation({
     mutationFn: (code) => handleOAuthCallback(code),
-    onSuccess: () => {
+    onSuccess: (response) => {
+      // Get user role from response
+      const userRole = response.user?.user_metadata?.role || response.user?.role;
+      
+      // For registrars, redirect to participants page
+      // The assignedProjectId is already stored in localStorage by AuthContext
+      // ProjectContext will automatically initialize from localStorage when it mounts
+      if (userRole === Role.REGISTRAR && response.user?.assignedProjectId) {
+        // Redirect to participants page immediately
+        // ProjectContext will be available there and will initialize from localStorage
+        navigate('/participants', { replace: true });
+      }
+
       toast({
         title: 'Zalogowano pomyślnie',
         description: 'Witaj!',
       });
-      // Navigation will be handled by AuthCallbackPage based on isAuthenticated state change
+      
+      // For non-registrars, navigation will be handled by AuthCallbackPage
+      // based on isAuthenticated state change
     },
     onError: (error) => {
       toast({

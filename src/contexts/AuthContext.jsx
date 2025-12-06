@@ -62,6 +62,11 @@ export function AuthProvider({ children }) {
     localStorage.setItem('refreshToken', response.session.refreshToken);
     localStorage.setItem('user', JSON.stringify(response.user));
 
+    // Store assigned_project_id for registrars (if present)
+    if (response.user?.assignedProjectId) {
+      localStorage.setItem('assignedProjectId', response.user.assignedProjectId);
+    }
+
     setUser(response.user);
     setIsAuthenticated(true);
 
@@ -85,6 +90,7 @@ export function AuthProvider({ children }) {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('assignedProjectId');
       setUser(null);
       setIsAuthenticated(false);
       // Clear all cached queries
@@ -106,6 +112,11 @@ export function AuthProvider({ children }) {
     localStorage.setItem('accessToken', response.session.accessToken);
     localStorage.setItem('refreshToken', response.session.refreshToken);
     localStorage.setItem('user', JSON.stringify(response.user));
+
+    // Store assigned_project_id for registrars (if present)
+    if (response.user?.assignedProjectId) {
+      localStorage.setItem('assignedProjectId', response.user.assignedProjectId);
+    }
 
     setUser(response.user);
     setIsAuthenticated(true);

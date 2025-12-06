@@ -24,12 +24,18 @@ export default function LoginPage() {
   const googleLoginMutation = useGoogleLogin()
 
   // Redirect if already authenticated
+  // Note: For registrars, redirect is handled in useLogin hook to ensure
+  // project context is initialized before navigation
   useEffect(() => {
     if (isAuthenticated) {
-      // Get redirect path based on role
-      const defaultPath = userRole === Role.ADMIN ? '/users' : '/participants'
-      const from = location.state?.from?.pathname || defaultPath
-      navigate(from, { replace: true })
+      // Only redirect if not already redirected by useLogin hook
+      // Check if we're still on login page (means useLogin didn't redirect)
+      if (window.location.pathname === '/login') {
+        // Get redirect path based on role
+        const defaultPath = userRole === Role.ADMIN ? '/users' : '/participants'
+        const from = location.state?.from?.pathname || defaultPath
+        navigate(from, { replace: true })
+      }
     }
   }, [isAuthenticated, userRole, navigate, location])
 
@@ -50,6 +56,43 @@ export default function LoginPage() {
     setError("")
     googleLoginMutation.mutate()
   }
+
+  // Handle error messages from mutations
+  useEffect(() => {
+    if (loginMutation.error) {
+      const errorResponse = loginMutation.error.response
+      if (errorResponse?.status === 403) {
+        const errorCode = errorResponse.data?.code
+        if (errorCode === 'ACCOUNT_PENDING_APPROVAL') {
+          setError("Twoje konto zostało utworzone, ale oczekuje na zatwierdzenie przez administratora. Skontaktuj się z organizatorem wydarzenia.")
+        } else if (errorCode === 'NO_PROJECT_ASSIGNED') {
+          setError("Twoje konto nie ma przypisanego projektu. Skontaktuj się z organizatorem wydarzenia.")
+        } else {
+          setError(errorResponse.data?.message || "Brak dostępu do konta. Skontaktuj się z organizatorem wydarzenia.")
+        }
+      } else {
+        setError(loginMutation.error.response?.data?.message || "Nieprawidłowy email lub hasło")
+      }
+    }
+  }, [loginMutation.error])
+
+  useEffect(() => {
+    if (googleLoginMutation.error) {
+      const errorResponse = googleLoginMutation.error.response
+      if (errorResponse?.status === 403) {
+        const errorCode = errorResponse.data?.code
+        if (errorCode === 'ACCOUNT_PENDING_APPROVAL') {
+          setError("Twoje konto zostało utworzone, ale oczekuje na zatwierdzenie przez administratora. Skontaktuj się z organizatorem wydarzenia.")
+        } else if (errorCode === 'NO_PROJECT_ASSIGNED') {
+          setError("Twoje konto nie ma przypisanego projektu. Skontaktuj się z organizatorem wydarzenia.")
+        } else {
+          setError(errorResponse.data?.message || "Brak dostępu do konta. Skontaktuj się z organizatorem wydarzenia.")
+        }
+      } else {
+        setError(googleLoginMutation.error.response?.data?.message || "Nie udało się zalogować")
+      }
+    }
+  }, [googleLoginMutation.error])
 
   const isLoading = loginMutation.isPending || googleLoginMutation.isPending
 

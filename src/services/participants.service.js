@@ -2,18 +2,13 @@ import apiClient from '../lib/api';
 
 export const participantsApi = {
   /**
-   * Pobiera listę uczestników dla projektu
+   * Pobiera listę uczestników dla projektu z mapowaniem pól
    * @param {string} projectId - ID projektu
-   * @returns {Promise<Array>}
+   * @returns {Promise<{config: Array, data: Array}>}
    */
   getParticipants: async (projectId) => {
-    // TODO: Replace with actual API endpoint when backend is ready
-    // const response = await apiClient.get(`/projects/${projectId}/participants`);
-    // return response.data;
-    
-    // For now, return empty array - this will be replaced when backend endpoint is available
-    // The ParticipantsPage currently uses mock data, but this structure is ready for API integration
-    return [];
+    const response = await apiClient.get(`/projects/${projectId}/participants`);
+    return response.data; // Returns { config: [...], data: [...] }
   },
 
   /**

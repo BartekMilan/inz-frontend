@@ -118,8 +118,28 @@ export const projectsApi = {
    * @returns {Promise<Array>}
    */
   getFieldDefinitions: async (projectId) => {
-    const response = await apiClient.get(`/projects/${projectId}/fields`);
-    return response.data;
+    console.log('[projectsApi.getFieldDefinitions] Called with projectId:', projectId);
+    console.log('[projectsApi.getFieldDefinitions] projectId type:', typeof projectId);
+    console.log('[projectsApi.getFieldDefinitions] Full URL will be: /projects/' + projectId + '/fields');
+    
+    if (!projectId) {
+      console.error('[projectsApi.getFieldDefinitions] ERROR: projectId is null/undefined!');
+      throw new Error('Project ID is required for getFieldDefinitions');
+    }
+    
+    try {
+      const response = await apiClient.get(`/projects/${projectId}/fields`);
+      console.log('[projectsApi.getFieldDefinitions] Response status:', response.status);
+      console.log('[projectsApi.getFieldDefinitions] Response data:', response.data);
+      console.log('[projectsApi.getFieldDefinitions] Response data type:', Array.isArray(response.data) ? 'Array' : typeof response.data);
+      console.log('[projectsApi.getFieldDefinitions] Response data length:', Array.isArray(response.data) ? response.data.length : 'N/A');
+      return response.data;
+    } catch (error) {
+      console.error('[projectsApi.getFieldDefinitions] API Error:', error);
+      console.error('[projectsApi.getFieldDefinitions] Error response:', error.response?.data);
+      console.error('[projectsApi.getFieldDefinitions] Error status:', error.response?.status);
+      throw error;
+    }
   },
 
   /**
@@ -164,6 +184,46 @@ export const projectsApi = {
    */
   deleteFieldDefinition: async (projectId, fieldId) => {
     await apiClient.delete(`/projects/${projectId}/fields/${fieldId}`);
+  },
+
+  // =====================================================
+  // FIELD MAPPING ENDPOINTS
+  // =====================================================
+
+  /**
+   * Pobiera zapisane mapowania pól dla projektu
+   * @param {string} projectId - ID projektu
+   * @returns {Promise<Array<{id: string, projectId: string, sheetColumnLetter: string, internalKey: string, displayName: string, isVisible: boolean, createdAt: string, updatedAt: string}>>}
+   */
+  getMappings: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/mappings`);
+    return response.data;
+  },
+
+  /**
+   * Skanuje nagłówki z arkusza Google Sheets
+   * @param {string} projectId - ID projektu
+   * @param {string} spreadsheetId - ID arkusza Google Sheets
+   * @returns {Promise<{headers: Array<{letter: string, value: string}>}>}
+   */
+  scanHeaders: async (projectId, spreadsheetId) => {
+    const response = await apiClient.post(`/projects/${projectId}/scan-headers`, {
+      spreadsheetId,
+    });
+    return response.data;
+  },
+
+  /**
+   * Aktualizuje mapowania pól dla projektu
+   * @param {string} projectId - ID projektu
+   * @param {Array} mappings - Tablica mapowań
+   * @returns {Promise<Array>}
+   */
+  updateMappings: async (projectId, mappings) => {
+    const response = await apiClient.put(`/projects/${projectId}/mappings`, {
+      mappings,
+    });
+    return response.data;
   },
 };
 

@@ -4,6 +4,7 @@ import { useProject } from '../contexts/ProjectContext';
 
 /**
  * Hook to fetch participants for the currently selected project
+ * Returns data in format: { config: [...], data: [...] }
  * @returns {Object} Query result with participants data
  */
 export function useParticipants() {
@@ -14,6 +15,16 @@ export function useParticipants() {
     queryFn: () => participantsApi.getParticipants(selectedProjectId),
     enabled: !!selectedProjectId, // Only fetch if project is selected
     staleTime: 30 * 1000, // 30 seconds
+    select: (data) => {
+      // Ensure we always return { config, data } structure
+      if (!data) {
+        return { config: [], data: [] };
+      }
+      return {
+        config: data.config || [],
+        data: data.data || [],
+      };
+    },
   });
 }
 

@@ -8,7 +8,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { ArrowUpDown, FileText, Search, Pencil, Plus, X } from "lucide-react"
+import { ArrowUpDown, FileText, Search, Pencil, Plus, X, Loader2, FileDown } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,13 +25,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-
-// Mock document templates
-const DOCUMENT_TEMPLATES = [
-  { id: "identifier", label: "Identyfikator" },
-  { id: "certificate", label: "Certyfikat" },
-  { id: "lunch-coupon", label: "Kupon na lunch" },
-]
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { useProjectTemplates } from "@/hooks/use-project-templates"
+import { useGeneratePdf } from "@/hooks/use-generate-pdf"
+import { useCreateDocumentTask } from "@/hooks/use-create-document-task"
+import { useProject } from "@/contexts/ProjectContext"
+import { useToast } from "@/hooks/use-toast"
 
 const useNavigation = () => {
   const navigate = (path) => {
@@ -45,13 +50,34 @@ const useNavigation = () => {
 
 export default function DynamicParticipantsTable({ config, data }) {
   const navigate = useNavigation()
+  const { selectedProjectId } = useProject()
+  const { toast } = useToast()
   const [sorting, setSorting] = useState([])
   const [activeFilters, setActiveFilters] = useState([])
   const [inputValue, setInputValue] = useState("")
   const [rowSelection, setRowSelection] = useState({})
   const [isDocModalOpen, setIsDocModalOpen] = useState(false)
-  const [selectedTemplates, setSelectedTemplates] = useState([])
   const [showFloatingHeader, setShowFloatingHeader] = useState(false)
+  
+  // Stan dla modala generowania PDF dla pojedynczego uczestnika
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false)
+  const [selectedParticipantId, setSelectedParticipantId] = useState(null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState("")
+  
+  // Stan dla modala zbiorczego generowania dokumentów
+  const [bulkTemplateId, setBulkTemplateId] = useState("")
+  const [bulkDriveFolderId, setBulkDriveFolderId] = useState("")
+  
+  // Hooki do pobierania szablonów i generowania PDF
+  const { 
+    data: templatesData, 
+    isLoading: templatesLoading, 
+    error: templatesError 
+  } = useProjectTemplates()
+  const generatePdfMutation = useGeneratePdf()
+  const createDocumentTaskMutation = useCreateDocumentTask()
+  
+  const templates = templatesData || []
 
   // Generate columns dynamically from config
   const columns = useMemo(() => {
@@ -95,12 +121,26 @@ export default function DynamicParticipantsTable({ config, data }) {
       enableSorting: false,
     }
 
-    // Actions column - empty header, pencil icon only
+    // Actions column - empty header, pencil icon and PDF generation button
     const actionsColumn = {
       id: "actions",
       header: () => null,
       cell: ({ row }) => (
-        <div className="text-right">
+        <div className="text-right flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={(e) => {
+              e.stopPropagation()
+              setSelectedParticipantId(row.original.id)
+              setIsPdfModalOpen(true)
+            }}
+            title="Generuj PDF"
+          >
+            <FileDown className="h-4 w-4" />
+            <span className="sr-only">Generuj PDF</span>
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -109,6 +149,7 @@ export default function DynamicParticipantsTable({ config, data }) {
               e.stopPropagation()
               navigate(`/participants/edit/${row.original.id}`)
             }}
+            title="Edytuj uczestnika"
           >
             <Pencil className="h-4 w-4" />
             <span className="sr-only">Edit participant</span>
@@ -167,28 +208,47 @@ export default function DynamicParticipantsTable({ config, data }) {
   })
 
   const selectedRowsCount = Object.keys(rowSelection).length
+  const selectedParticipantIds = useMemo(() => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows
+    return selectedRows.map((r) => r.original.id)
+  }, [rowSelection])
 
   const handleRowDoubleClick = (row) => {
     navigate(`/participants/edit/${row.original.id}`)
   }
 
-  const handleOpenDocModal = () => {
-    setSelectedTemplates([])
+  const handleOpenBulkModal = () => {
+    setBulkTemplateId("")
+    setBulkDriveFolderId("")
     setIsDocModalOpen(true)
   }
 
-  const handleTemplateToggle = (templateId) => {
-    setSelectedTemplates((prev) =>
-      prev.includes(templateId) ? prev.filter((id) => id !== templateId) : [...prev, templateId],
-    )
-  }
+  const handleScheduleBulkGeneration = () => {
+    if (!selectedProjectId || !bulkTemplateId || selectedParticipantIds.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Błąd',
+        description: 'Wypełnij wszystkie wymagane pola.',
+      })
+      return
+    }
 
-  const handleGenerateDocuments = () => {
-    const selectedRows = table.getFilteredSelectedRowModel().rows
-    const participantIds = selectedRows.map((r) => r.original.id)
-    console.log("Selected templates:", selectedTemplates)
-    console.log("Selected participant IDs:", participantIds)
-    setIsDocModalOpen(false)
+    createDocumentTaskMutation.mutate(
+      {
+        projectId: selectedProjectId,
+        templateId: bulkTemplateId,
+        participantIds: selectedParticipantIds,
+        outputDriveFolderId: bulkDriveFolderId || undefined,
+      },
+      {
+        onSuccess: () => {
+          setIsDocModalOpen(false)
+          setRowSelection({}) // Wyczyść zaznaczenie
+          setBulkTemplateId("")
+          setBulkDriveFolderId("")
+        },
+      }
+    )
   }
 
   const handleAddParticipant = () => {
@@ -308,9 +368,13 @@ export default function DynamicParticipantsTable({ config, data }) {
 
             {/* Action Buttons */}
             <div className="flex gap-2">
-              <Button onClick={handleOpenDocModal} disabled={selectedRowsCount === 0} className="gap-2">
+              <Button 
+                onClick={handleOpenBulkModal} 
+                disabled={selectedRowsCount < 2} 
+                className="gap-2"
+              >
                 <FileText className="h-4 w-4" />
-                Generuj Dokumenty
+                Generuj zbiorczo
                 {selectedRowsCount > 0 && (
                   <span className="ml-1 rounded-full bg-primary-foreground/20 px-2 py-0.5 text-xs">
                     {selectedRowsCount}
@@ -389,9 +453,13 @@ export default function DynamicParticipantsTable({ config, data }) {
 
             {/* Action Buttons */}
             <div className="flex gap-2">
-              <Button onClick={handleOpenDocModal} disabled={selectedRowsCount === 0} className="gap-2">
+              <Button 
+                onClick={handleOpenBulkModal} 
+                disabled={selectedRowsCount < 2} 
+                className="gap-2"
+              >
                 <FileText className="h-4 w-4" />
-                Generuj Dokumenty
+                Generuj zbiorczo
                 {selectedRowsCount > 0 && (
                   <span className="ml-1 rounded-full bg-primary-foreground/20 px-2 py-0.5 text-xs">
                     {selectedRowsCount}
@@ -456,43 +524,235 @@ export default function DynamicParticipantsTable({ config, data }) {
         </CardContent>
       </Card>
 
-      {/* Document Generation Modal */}
-      <Dialog open={isDocModalOpen} onOpenChange={setIsDocModalOpen}>
+      {/* Bulk Document Generation Modal */}
+      <Dialog 
+        open={isDocModalOpen} 
+        onOpenChange={(open) => {
+          setIsDocModalOpen(open)
+          if (!open) {
+            setBulkTemplateId("")
+            setBulkDriveFolderId("")
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Generuj Dokumenty</DialogTitle>
+            <DialogTitle>Zaplanuj generowanie dokumentów</DialogTitle>
             <DialogDescription>
-              Generating documents for {selectedRowsCount} selected participant{selectedRowsCount !== 1 ? "s" : ""}.
+              Zaplanuj generowanie dokumentów dla {selectedRowsCount} wybran{selectedRowsCount === 1 ? "ego" : "ych"} uczestnik{selectedRowsCount === 1 ? "a" : "ów"}.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <p className="text-sm font-medium">Select document templates:</p>
-            <div className="space-y-3">
-              {DOCUMENT_TEMPLATES.map((template) => (
-                <div key={template.id} className="flex items-center space-x-3">
-                  <Checkbox
-                    id={template.id}
-                    checked={selectedTemplates.includes(template.id)}
-                    onCheckedChange={() => handleTemplateToggle(template.id)}
-                  />
-                  <label
-                    htmlFor={template.id}
-                    className="text-sm font-medium leading-none cursor-pointer peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {template.label}
-                  </label>
+            {/* Template Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Wybierz szablon dokumentu:</label>
+              {templatesLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-sm text-muted-foreground">Ładowanie szablonów...</span>
                 </div>
-              ))}
+              ) : templatesError ? (
+                <div className="py-4 text-center space-y-2">
+                  <p className="text-sm text-destructive font-medium">
+                    Nie udało się załadować szablonów dokumentów.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {templatesError?.message || "Wystąpił nieoczekiwany błąd."}
+                  </p>
+                </div>
+              ) : templates.length === 0 ? (
+                <div className="py-4 text-center text-sm text-muted-foreground">
+                  Brak skonfigurowanych szablonów. Dodaj je w Ustawieniach.
+                </div>
+              ) : (
+                <Select value={bulkTemplateId} onValueChange={setBulkTemplateId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Wybierz szablon..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {/* Optional Drive Folder ID */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Folder ID w Google Drive <span className="text-muted-foreground">(opcjonalnie)</span>
+              </label>
+              <Input
+                placeholder="Wprowadź ID folderu..."
+                value={bulkDriveFolderId}
+                onChange={(e) => setBulkDriveFolderId(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Folder musi być udostępniony kontu serwisowemu aplikacji.
+              </p>
             </div>
           </div>
 
           <DialogFooter className="flex justify-between sm:justify-between">
-            <Button variant="outline" onClick={() => setIsDocModalOpen(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsDocModalOpen(false)
+                setBulkTemplateId("")
+                setBulkDriveFolderId("")
+              }}
+              disabled={createDocumentTaskMutation.isPending}
+            >
               Anuluj
             </Button>
-            <Button onClick={handleGenerateDocuments} disabled={selectedTemplates.length === 0}>
-              Generuj
+            <Button 
+              onClick={handleScheduleBulkGeneration} 
+              disabled={
+                !bulkTemplateId || 
+                templatesLoading || 
+                templates.length === 0 ||
+                createDocumentTaskMutation.isPending
+              }
+            >
+              {createDocumentTaskMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Planowanie...
+                </>
+              ) : (
+                'Zaplanuj generowanie'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF Generation Modal for Single Participant */}
+      <Dialog 
+        open={isPdfModalOpen} 
+        onOpenChange={(open) => {
+          setIsPdfModalOpen(open)
+          if (!open) {
+            setSelectedParticipantId(null)
+            setSelectedTemplateId("")
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generuj PDF</DialogTitle>
+            <DialogDescription>
+              Wybierz szablon dokumentu do wygenerowania dla uczestnika.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {templatesLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">Ładowanie szablonów...</span>
+              </div>
+            ) : templates.length === 0 ? (
+              <div className="py-4 text-center text-sm text-muted-foreground">
+                Brak skonfigurowanych szablonów dla tego projektu.
+              </div>
+            ) : templates.length === 1 ? (
+              // Jeśli jest tylko jeden szablon, nie pokazuj dropdown
+              <div className="py-2">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Szablon: <span className="font-medium">{templates[0].name}</span>
+                </p>
+              </div>
+            ) : (
+              // Jeśli jest więcej szablonów, pokaż dropdown
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Wybierz szablon:</label>
+                <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Wybierz szablon..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsPdfModalOpen(false)
+                setSelectedParticipantId(null)
+                setSelectedTemplateId("")
+              }}
+            >
+              Anuluj
+            </Button>
+            <Button 
+              onClick={() => {
+                if (!selectedProjectId || !selectedParticipantId) {
+                  toast({
+                    variant: 'destructive',
+                    title: 'Błąd',
+                    description: 'Brak wymaganych danych.',
+                  })
+                  return
+                }
+
+                // Jeśli jest tylko jeden szablon, użyj go automatycznie
+                const templateId = templates.length === 1 
+                  ? templates[0].id 
+                  : selectedTemplateId
+
+                if (!templateId) {
+                  toast({
+                    variant: 'destructive',
+                    title: 'Błąd',
+                    description: 'Wybierz szablon dokumentu.',
+                  })
+                  return
+                }
+
+                generatePdfMutation.mutate(
+                  {
+                    projectId: selectedProjectId,
+                    templateId: templateId,
+                    participantId: selectedParticipantId,
+                  },
+                  {
+                    onSuccess: () => {
+                      setIsPdfModalOpen(false)
+                      setSelectedParticipantId(null)
+                      setSelectedTemplateId("")
+                    },
+                  }
+                )
+              }}
+              disabled={
+                templatesLoading || 
+                templates.length === 0 || 
+                (templates.length > 1 && !selectedTemplateId) ||
+                generatePdfMutation.isPending
+              }
+            >
+              {generatePdfMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generowanie...
+                </>
+              ) : (
+                'Generuj'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

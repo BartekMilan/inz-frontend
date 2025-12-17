@@ -51,6 +51,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import TemplateMappingsModal from '@/components/TemplateMappingsModal';
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -71,6 +72,10 @@ export default function SettingsPage() {
   // State for New Template Form
   const [newTemplateName, setNewTemplateName] = useState('');
   const [newTemplateDocId, setNewTemplateDocId] = useState('');
+
+  // State for Template Mappings Modal
+  const [mappingsModalOpen, setMappingsModalOpen] = useState(false);
+  const [selectedTemplateForMappings, setSelectedTemplateForMappings] = useState(null);
 
   // State for Mapping Wizard
   const [scannedHeaders, setScannedHeaders] = useState([]);
@@ -1350,7 +1355,7 @@ export default function SettingsPage() {
                   <TableRow>
                     <TableHead>Nazwa Szablonu</TableHead>
                     <TableHead>Google Doc ID</TableHead>
-                    <TableHead className="w-[100px] text-right">
+                    <TableHead className="w-[150px] text-right">
                       Akcje
                     </TableHead>
                   </TableRow>
@@ -1375,19 +1380,32 @@ export default function SettingsPage() {
                           {template.docId}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteTemplate(template.id)}
-                            disabled={isDeletingTemplate || !isAdmin}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            {isDeletingTemplate ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedTemplateForMappings(template);
+                                setMappingsModalOpen(true);
+                              }}
+                              disabled={!isAdmin}
+                            >
+                              Mapowania
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteTemplate(template.id)}
+                              disabled={isDeletingTemplate || !isAdmin}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              {isDeletingTemplate ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -1532,6 +1550,16 @@ export default function SettingsPage() {
           </AlertDescription>
         </Alert>
       </div>
+
+      {/* Template Mappings Modal */}
+      {selectedTemplateForMappings && (
+        <TemplateMappingsModal
+          open={mappingsModalOpen}
+          onOpenChange={setMappingsModalOpen}
+          templateId={selectedTemplateForMappings.id}
+          templateName={selectedTemplateForMappings.name}
+        />
+      )}
     </div>
   );
 }

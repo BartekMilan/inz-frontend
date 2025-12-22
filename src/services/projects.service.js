@@ -61,6 +61,16 @@ export const projectsApi = {
     await apiClient.delete(`/projects/${projectId}`);
   },
 
+  /**
+   * Pobiera statystyki projektu
+   * @param {string} projectId - ID projektu
+   * @returns {Promise<Object>}
+   */
+  getProjectStats: async (projectId) => {
+    const response = await apiClient.get(`/projects/${projectId}/stats`);
+    return response.data;
+  },
+
   // =====================================================
   // PROJECT MEMBERS
   // =====================================================
@@ -101,11 +111,11 @@ export const projectsApi = {
   /**
    * Usuwa członka z projektu
    * @param {string} projectId - ID projektu
-   * @param {string} memberId - ID członkostwa
+   * @param {string} userId - ID użytkownika (nie memberId!)
    * @returns {Promise<void>}
    */
-  removeProjectMember: async (projectId, memberId) => {
-    await apiClient.delete(`/projects/${projectId}/members/${memberId}`);
+  removeProjectMember: async (projectId, userId) => {
+    await apiClient.delete(`/projects/${projectId}/members/${userId}`);
   },
 
   // =====================================================

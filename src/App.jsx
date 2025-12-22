@@ -16,6 +16,8 @@ import SettingsPage from './pages/SettingsPage';
 import RegisterPage from './pages/RegisterPage';
 import PasswordResetPage from './pages/PasswordResetPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
+import DashboardPage from './pages/DashboardPage';
+import ProjectTeamPage from './pages/ProjectTeamPage';
 
 // Role-protected route wrapper component
 function RoleProtectedRoute({ children, allowedRoles }) {
@@ -64,6 +66,18 @@ function App() {
                         } 
                       />
                       
+                      {/* Dashboard - dostęp dla wszystkich */}
+                      <Route 
+                        path="/dashboard" 
+                        element={<DashboardPage />} 
+                      />
+                      
+                      {/* Project Team - dostęp dla owner */}
+                      <Route 
+                        path="/project-team" 
+                        element={<ProjectTeamPage />} 
+                      />
+                      
                       {/* Admin and Registrar routes */}
                       <Route 
                         path="/participants" 
@@ -90,11 +104,11 @@ function App() {
                         } 
                       />
                       
-                      {/* Default redirect for authenticated users based on role */}
-                      <Route path="/" element={<Navigate to="/participants" replace />} />
+                      {/* Default redirect for authenticated users - przekierowanie do dashboard */}
+                      <Route path="/" element={<Navigate to="/dashboard" replace />} />
                       
                       {/* 404 inside dashboard */}
-                      <Route path="*" element={<Navigate to="/participants" replace />} />
+                      <Route path="*" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
                   </DashboardLayout>
                 </ProjectProvider>

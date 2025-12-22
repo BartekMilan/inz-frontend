@@ -77,10 +77,27 @@ export function ProjectProvider({ children }) {
     }
   }, [projects, selectedProjectId, isLoadingProjects, isAdmin]);
 
-  // Get selected project object
+  // Fetch selected project details with user role
+  const {
+    data: projectDetails,
+    isLoading: isLoadingProjectDetails,
+  } = useQuery({
+    queryKey: ['projectDetails', selectedProjectId],
+    queryFn: () => projectsApi.getProject(selectedProjectId),
+    enabled: !!selectedProjectId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+
+  // Get selected project object (prefer details from API, fallback to list)
   const selectedProject = useMemo(() => {
+    if (projectDetails) {
+      return projectDetails;
+    }
     return projects.find(p => p.id === selectedProjectId) || null;
-  }, [projects, selectedProjectId]);
+  }, [projects, selectedProjectId, projectDetails]);
+
+  // Get user's role in the selected project
+  const myRole = selectedProject?.role || null;
 
   // Switch project
   const switchProject = useCallback((projectId) => {
@@ -96,6 +113,7 @@ export function ProjectProvider({ children }) {
     queryClient.invalidateQueries({ queryKey: ['projectMembers'] });
     queryClient.invalidateQueries({ queryKey: ['participants'] });
     queryClient.invalidateQueries({ queryKey: ['eventConfig'] });
+    queryClient.invalidateQueries({ queryKey: ['projectDetails'] });
   }, [queryClient]);
 
   // Create project mutation
@@ -179,6 +197,10 @@ export function ProjectProvider({ children }) {
     selectedProjectId,
     isLoadingProjects,
     projectsError,
+    isLoadingProjectDetails,
+    
+    // Project role
+    myRole, // User's role in the selected project ('owner', 'editor', 'viewer')
     
     // Actions
     switchProject,

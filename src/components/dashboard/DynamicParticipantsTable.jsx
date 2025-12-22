@@ -48,7 +48,7 @@ const useNavigation = () => {
   return navigate
 }
 
-export default function DynamicParticipantsTable({ config, data }) {
+export default function DynamicParticipantsTable({ config, data, canEditData = true }) {
   const navigate = useNavigation()
   const { selectedProjectId } = useProject()
   const { toast } = useToast()
@@ -127,40 +127,44 @@ export default function DynamicParticipantsTable({ config, data }) {
       header: () => null,
       cell: ({ row }) => (
         <div className="text-right flex items-center justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={(e) => {
-              e.stopPropagation()
-              setSelectedParticipantId(row.original.id)
-              setIsPdfModalOpen(true)
-            }}
-            title="Generuj PDF"
-          >
-            <FileDown className="h-4 w-4" />
-            <span className="sr-only">Generuj PDF</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={(e) => {
-              e.stopPropagation()
-              navigate(`/participants/edit/${row.original.id}`)
-            }}
-            title="Edytuj uczestnika"
-          >
-            <Pencil className="h-4 w-4" />
-            <span className="sr-only">Edit participant</span>
-          </Button>
+          {canEditData && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSelectedParticipantId(row.original.id)
+                  setIsPdfModalOpen(true)
+                }}
+                title="Generuj PDF"
+              >
+                <FileDown className="h-4 w-4" />
+                <span className="sr-only">Generuj PDF</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigate(`/participants/edit/${row.original.id}`)
+                }}
+                title="Edytuj uczestnika"
+              >
+                <Pencil className="h-4 w-4" />
+                <span className="sr-only">Edit participant</span>
+              </Button>
+            </>
+          )}
         </div>
       ),
       enableSorting: false,
     }
 
     return [selectColumn, ...dynamicColumns, actionsColumn]
-  }, [config, navigate])
+  }, [config, navigate, canEditData])
 
   // Custom filter function that checks all active filters (AND logic)
   const customFilterFn = useCallback((row, columnId, filterValue) => {
@@ -214,7 +218,9 @@ export default function DynamicParticipantsTable({ config, data }) {
   }, [rowSelection])
 
   const handleRowDoubleClick = (row) => {
-    navigate(`/participants/edit/${row.original.id}`)
+    if (canEditData) {
+      navigate(`/participants/edit/${row.original.id}`)
+    }
   }
 
   const handleOpenBulkModal = () => {
@@ -367,25 +373,27 @@ export default function DynamicParticipantsTable({ config, data }) {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-2">
-              <Button 
-                onClick={handleOpenBulkModal} 
-                disabled={selectedRowsCount < 2} 
-                className="gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                Generuj zbiorczo
-                {selectedRowsCount > 0 && (
-                  <span className="ml-1 rounded-full bg-primary-foreground/20 px-2 py-0.5 text-xs">
-                    {selectedRowsCount}
-                  </span>
-                )}
-              </Button>
-              <Button variant="outline" onClick={handleAddParticipant} className="gap-2 bg-transparent">
-                <Plus className="h-4 w-4" />
-                Add Participant
-              </Button>
-            </div>
+            {canEditData && (
+              <div className="flex gap-2">
+                <Button 
+                  onClick={handleOpenBulkModal} 
+                  disabled={selectedRowsCount < 2} 
+                  className="gap-2"
+                >
+                  <FileText className="h-4 w-4" />
+                  Generuj zbiorczo
+                  {selectedRowsCount > 0 && (
+                    <span className="ml-1 rounded-full bg-primary-foreground/20 px-2 py-0.5 text-xs">
+                      {selectedRowsCount}
+                    </span>
+                  )}
+                </Button>
+                <Button variant="outline" onClick={handleAddParticipant} className="gap-2 bg-transparent">
+                  <Plus className="h-4 w-4" />
+                  Add Participant
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -452,25 +460,27 @@ export default function DynamicParticipantsTable({ config, data }) {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-2">
-              <Button 
-                onClick={handleOpenBulkModal} 
-                disabled={selectedRowsCount < 2} 
-                className="gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                Generuj zbiorczo
-                {selectedRowsCount > 0 && (
-                  <span className="ml-1 rounded-full bg-primary-foreground/20 px-2 py-0.5 text-xs">
-                    {selectedRowsCount}
-                  </span>
-                )}
-              </Button>
-              <Button variant="outline" onClick={handleAddParticipant} className="gap-2 bg-transparent">
-                <Plus className="h-4 w-4" />
-                Dodaj uczestnika
-              </Button>
-            </div>
+            {canEditData && (
+              <div className="flex gap-2">
+                <Button 
+                  onClick={handleOpenBulkModal} 
+                  disabled={selectedRowsCount < 2} 
+                  className="gap-2"
+                >
+                  <FileText className="h-4 w-4" />
+                  Generuj zbiorczo
+                  {selectedRowsCount > 0 && (
+                    <span className="ml-1 rounded-full bg-primary-foreground/20 px-2 py-0.5 text-xs">
+                      {selectedRowsCount}
+                    </span>
+                  )}
+                </Button>
+                <Button variant="outline" onClick={handleAddParticipant} className="gap-2 bg-transparent">
+                  <Plus className="h-4 w-4" />
+                  Dodaj uczestnika
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Table */}

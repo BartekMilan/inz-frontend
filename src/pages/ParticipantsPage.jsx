@@ -1,6 +1,7 @@
 "use client"
 
 import { useProject } from "@/contexts/ProjectContext"
+import { useProjectPermissions } from "@/hooks/use-project-permissions"
 import { useParticipants } from "@/hooks/use-participants"
 import DynamicParticipantsTable from "@/components/dashboard/DynamicParticipantsTable"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -8,6 +9,7 @@ import { AlertTriangle } from "lucide-react"
 
 export default function ParticipantsPage() {
   const { selectedProjectId } = useProject()
+  const { canEditData } = useProjectPermissions()
   const { data, isLoading, error } = useParticipants()
 
   // Show message if no project is selected
@@ -53,6 +55,7 @@ export default function ParticipantsPage() {
         <DynamicParticipantsTable 
           config={config} 
           data={participantsData}
+          canEditData={canEditData}
         />
       </div>
     </main>

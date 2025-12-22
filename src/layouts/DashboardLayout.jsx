@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { Menu, Users, Contact, UserPlus, Settings, LogOut, User, Hexagon, FolderKanban } from "lucide-react"
+import { Menu, Users, Contact, UserPlus, Settings, LogOut, User, Hexagon, FolderKanban, Home } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -22,14 +22,40 @@ import { useLogout } from "@/hooks/use-auth"
 import { Role } from "@/lib/roles"
 import ProjectSwitcher from "@/components/ProjectSwitcher"
 import { useProject } from "@/contexts/ProjectContext"
+import { useProjectPermissions } from "@/hooks/use-project-permissions"
 
 // Navigation items with role-based access
-// roles: array of roles that can access this item (empty = all authenticated users)
+// projectRoles: array of project roles that can access this item (empty = all users)
+// systemRoles: array of system roles that can access this item (empty = all users)
 const navigationItems = [
-  { label: "Zespół", icon: Users, href: "/users", roles: [Role.ADMIN] },
-  { label: "Uczestnicy", icon: Contact, href: "/participants", roles: [Role.ADMIN, Role.REGISTRAR] },
-  { label: "Dodaj uczestnika", icon: UserPlus, href: "/participants/new", roles: [Role.ADMIN, Role.REGISTRAR] },
-  { label: "Ustawienia", icon: Settings, href: "/settings", roles: [Role.ADMIN] },
+  { 
+    label: "Dashboard", 
+    icon: Home, 
+    href: "/dashboard", 
+    projectRoles: [], // Wszyscy mogą zobaczyć dashboard
+    systemRoles: []
+  },
+  { 
+    label: "Uczestnicy", 
+    icon: Contact, 
+    href: "/participants", 
+    projectRoles: [], // Wszyscy mogą zobaczyć uczestników
+    systemRoles: []
+  },
+  { 
+    label: "Zespół", 
+    icon: Users, 
+    href: "/project-team", 
+    projectRoles: ['owner'], // Tylko owner może zarządzać zespołem
+    systemRoles: []
+  },
+  { 
+    label: "Ustawienia", 
+    icon: Settings, 
+    href: "/settings", 
+    projectRoles: ['owner'], // Tylko owner może zarządzać ustawieniami
+    systemRoles: []
+  },
 ]
 
 function NavItem({ item, isActive, onClick }) {
@@ -98,22 +124,33 @@ function DashboardLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { user, userRole, checkRole } = useAuth()
   const { isAdmin, selectedProject } = useProject()
+  const { canManageProject, role: projectRole } = useProjectPermissions()
   const logoutMutation = useLogout()
 
   const activeRoute = location.pathname
   const isActive = (path) => location.pathname.startsWith(path)
 
-  // Filter navigation items based on user role
+  // Filter navigation items based on user role (system and project roles)
   const filteredNavItems = useMemo(() => {
     return navigationItems.filter((item) => {
-      // If no roles specified, allow all authenticated users
-      if (!item.roles || item.roles.length === 0) {
-        return true;
+      // Check project role requirements
+      if (item.projectRoles && item.projectRoles.length > 0) {
+        if (!projectRole || !item.projectRoles.includes(projectRole)) {
+          return false;
+        }
       }
-      // Check if user has one of the required roles
-      return checkRole(item.roles);
+      
+      // Check system role requirements
+      if (item.systemRoles && item.systemRoles.length > 0) {
+        if (!checkRole(item.systemRoles)) {
+          return false;
+        }
+      }
+      
+      // If no restrictions, allow all authenticated users
+      return true;
     });
-  }, [checkRole]);
+  }, [checkRole, projectRole]);
 
   const handleNavigate = (href) => {
     navigate(href)

@@ -1,9 +1,11 @@
 import apiClient from '../lib/api';
 
 export const usersApi = {
-  // Get all users (admin only)
-  getAllUsers: async () => {
-    const response = await apiClient.get('/users');
+  // Get all users (admin) or project members (owner/editor)
+  // @param {string} [projectId] - Optional project ID to get project members
+  getAllUsers: async (projectId) => {
+    const url = projectId ? `/users?projectId=${projectId}` : '/users';
+    const response = await apiClient.get(url);
     return response.data;
   },
 

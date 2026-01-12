@@ -27,6 +27,7 @@ import { useProjectPermissions } from "@/hooks/use-project-permissions"
 // Navigation items with role-based access
 // projectRoles: array of project roles that can access this item (empty = all users)
 // systemRoles: array of system roles that can access this item (empty = all users)
+// requiresAdminOrOwner: if true, item is visible for ADMIN (system) OR OWNER (project)
 const navigationItems = [
   { 
     label: "Dashboard", 
@@ -45,16 +46,14 @@ const navigationItems = [
   { 
     label: "Zespół", 
     icon: Users, 
-    href: "/project-team", 
-    projectRoles: ['owner'], // Tylko owner może zarządzać zespołem
-    systemRoles: []
+    href: "/users", 
+    requiresAdminOrOwner: true // ADMIN (systemowy) LUB OWNER (projektowy) LUB EDITOR (projektowy)
   },
   { 
     label: "Ustawienia", 
     icon: Settings, 
     href: "/settings", 
-    projectRoles: ['owner'], // Tylko owner może zarządzać ustawieniami
-    systemRoles: []
+    requiresAdminOrOwner: true // ADMIN (systemowy) LUB OWNER (projektowy)
   },
 ]
 
@@ -133,6 +132,11 @@ function DashboardLayout({ children }) {
   // Filter navigation items based on user role (system and project roles)
   const filteredNavItems = useMemo(() => {
     return navigationItems.filter((item) => {
+      // Special case: requiresAdminOrOwner - dostęp dla ADMIN (systemowy) LUB OWNER/EDITOR (projektowy)
+      if (item.requiresAdminOrOwner) {
+        return isAdmin || projectRole === 'owner' || projectRole === 'editor';
+      }
+      
       // Check project role requirements
       if (item.projectRoles && item.projectRoles.length > 0) {
         if (!projectRole || !item.projectRoles.includes(projectRole)) {
@@ -150,7 +154,7 @@ function DashboardLayout({ children }) {
       // If no restrictions, allow all authenticated users
       return true;
     });
-  }, [checkRole, projectRole]);
+  }, [checkRole, projectRole, isAdmin]);
 
   const handleNavigate = (href) => {
     navigate(href)

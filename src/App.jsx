@@ -17,7 +17,6 @@ import RegisterPage from './pages/RegisterPage';
 import PasswordResetPage from './pages/PasswordResetPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import DashboardPage from './pages/DashboardPage';
-import ProjectTeamPage from './pages/ProjectTeamPage';
 
 // Role-protected route wrapper component
 function RoleProtectedRoute({ children, allowedRoles }) {
@@ -50,14 +49,6 @@ function App() {
                     <Routes>
                       {/* Admin only routes */}
                       <Route 
-                        path="/users" 
-                        element={
-                          <RoleProtectedRoute allowedRoles={[Role.ADMIN]}>
-                            <UsersPage />
-                          </RoleProtectedRoute>
-                        } 
-                      />
-                      <Route 
                         path="/settings" 
                         element={
                           <RoleProtectedRoute allowedRoles={[Role.ADMIN]}>
@@ -66,16 +57,16 @@ function App() {
                         } 
                       />
                       
+                      {/* Users/Team - dostęp dla ADMIN, OWNER, EDITOR (logika w komponencie) */}
+                      <Route 
+                        path="/users" 
+                        element={<UsersPage />} 
+                      />
+                      
                       {/* Dashboard - dostęp dla wszystkich */}
                       <Route 
                         path="/dashboard" 
                         element={<DashboardPage />} 
-                      />
-                      
-                      {/* Project Team - dostęp dla owner */}
-                      <Route 
-                        path="/project-team" 
-                        element={<ProjectTeamPage />} 
                       />
                       
                       {/* Admin and Registrar routes */}

@@ -28,13 +28,15 @@ import { useProjectPermissions } from "@/hooks/use-project-permissions"
 // projectRoles: array of project roles that can access this item (empty = all users)
 // systemRoles: array of system roles that can access this item (empty = all users)
 // requiresAdminOrOwner: if true, item is visible for ADMIN (system) OR OWNER (project)
+// hideForRegistrar: if true, item is hidden for REGISTRAR (system role)
 const navigationItems = [
   { 
     label: "Dashboard", 
     icon: Home, 
     href: "/dashboard", 
-    projectRoles: [], // Wszyscy mogą zobaczyć dashboard
-    systemRoles: []
+    projectRoles: [], 
+    systemRoles: [],
+    hideForRegistrar: true // REGISTRAR nie potrzebuje dashboardu - jego "domem" jest lista uczestników
   },
   { 
     label: "Uczestnicy", 
@@ -47,13 +49,15 @@ const navigationItems = [
     label: "Zespół", 
     icon: Users, 
     href: "/users", 
-    requiresAdminOrOwner: true // ADMIN (systemowy) LUB OWNER (projektowy) LUB EDITOR (projektowy)
+    requiresAdminOrOwner: true, // ADMIN (systemowy) LUB OWNER (projektowy) LUB EDITOR (projektowy)
+    hideForRegistrar: true // REGISTRAR nie zarządza zespołem
   },
   { 
     label: "Ustawienia", 
     icon: Settings, 
     href: "/settings", 
-    requiresAdminOrOwner: true // ADMIN (systemowy) LUB OWNER (projektowy)
+    requiresAdminOrOwner: true, // ADMIN (systemowy) LUB OWNER (projektowy)
+    hideForRegistrar: true // REGISTRAR nie konfiguruje projektu
   },
 ]
 
@@ -131,7 +135,14 @@ function DashboardLayout({ children }) {
 
   // Filter navigation items based on user role (system and project roles)
   const filteredNavItems = useMemo(() => {
+    const isRegistrar = userRole === Role.REGISTRAR;
+    
     return navigationItems.filter((item) => {
+      // REGISTRAR nie widzi elementów z hideForRegistrar (np. Dashboard)
+      if (item.hideForRegistrar && isRegistrar) {
+        return false;
+      }
+      
       // Special case: requiresAdminOrOwner - dostęp dla ADMIN (systemowy) LUB OWNER/EDITOR (projektowy)
       if (item.requiresAdminOrOwner) {
         return isAdmin || projectRole === 'owner' || projectRole === 'editor';
@@ -154,7 +165,7 @@ function DashboardLayout({ children }) {
       // If no restrictions, allow all authenticated users
       return true;
     });
-  }, [checkRole, projectRole, isAdmin]);
+  }, [checkRole, projectRole, isAdmin, userRole]);
 
   const handleNavigate = (href) => {
     navigate(href)

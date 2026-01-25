@@ -1,22 +1,13 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Send, Trash2, RefreshCw, UserCircle2, Check, Loader2, UserPlus, Mail, Shield, AlertCircle } from "lucide-react"
+import { Trash2, Check, Loader2, Mail, Shield, AlertCircle, UserCheck, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Switch } from "@/components/ui/switch"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,112 +25,77 @@ import { projectsApi } from "@/services/projects.service"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
 import { useProject } from "@/contexts/ProjectContext"
-import { useProjectPermissions } from "@/hooks/use-project-permissions"
 import { Role } from "@/lib/roles"
 
-// Etykiety ról dla widoku globalnego (systemowe)
+// Etykiety ról systemowych
 const SYSTEM_ROLE_LABELS = {
   admin: 'Administrator',
   registrar: 'Rejestrator',
 }
 
-// Etykiety ról dla widoku projektu
-const PROJECT_ROLE_LABELS = {
-  owner: 'Manager',
-  editor: 'Operator',
-  viewer: 'Audytor',
-}
-
-const PROJECT_ROLE_COLORS = {
-  owner: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  editor: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  viewer: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+// Kolory dla statusów
+const STATUS_COLORS = {
+  approved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 border-green-200',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 border-yellow-200',
+  noProject: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300 border-orange-200',
 }
 
 export default function UsersPage() {
-  const { isAdmin, selectedProjectId, selectedProject } = useProject()
-  const { canManageProject, role: projectRole } = useProjectPermissions()
+  const { isAdmin } = useProject()
   const { user: currentUser } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
-  // Stan dla dialogów
-  const [inviteEmail, setInviteEmail] = useState("")
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [newMemberEmail, setNewMemberEmail] = useState("")
-  const [newMemberRole, setNewMemberRole] = useState("viewer")
-  const [memberToDelete, setMemberToDelete] = useState(null)
+  // Stan dla dialogu usuwania
+  const [userToDelete, setUserToDelete] = useState(null)
 
-  // Określ czy pobieramy kontekst projektu
-  // Admin zawsze pobiera globalną listę (nawet z wybranym projektem)
-  // Non-admin pobiera tylko członków wybranego projektu
-  const shouldFetchProjectMembers = selectedProjectId && !isAdmin
-  const projectId = shouldFetchProjectMembers ? selectedProjectId : undefined
-  
-  // Określ tryb widoku UI - Admin zawsze widzi widok globalny, non-admin widzi widok projektu
-  const isProjectView = !isAdmin && !!selectedProjectId
-
-  // Fetch users - przekazujemy projectId tylko dla non-admin z wybranym projektem
+  // Fetch wszystkich użytkowników (tylko dla Admina)
   const { data: usersData, isLoading: usersLoading, error: usersError } = useQuery({
-    queryKey: ['users', projectId],
-    queryFn: () => usersApi.getAllUsers(projectId),
-    enabled: isAdmin ? true : !!selectedProjectId, // Admin zawsze może pobrać, non-admin wymaga projectId
+    queryKey: ['users'],
+    queryFn: () => usersApi.getAllUsers(),
+    enabled: isAdmin,
+  })
+
+  // Fetch wszystkich projektów (do dropdowna)
+  const { data: projectsData, isLoading: projectsLoading } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projectsApi.getProjects(),
+    enabled: isAdmin,
   })
 
   const users = usersData?.users || []
+  const projects = projectsData?.projects || []
 
-  // Mutacja dodawania członka do projektu
-  const addMemberMutation = useMutation({
-    mutationFn: (data) => projectsApi.addProjectMember(selectedProjectId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users', selectedProjectId] })
-      queryClient.invalidateQueries({ queryKey: ['projectMembers', selectedProjectId] })
-      setIsAddDialogOpen(false)
-      setNewMemberEmail("")
-      setNewMemberRole("viewer")
-      toast({
-        title: 'Sukces',
-        description: 'Członek został dodany do projektu.',
-      })
-    },
-    onError: (error) => {
-      toast({
-        variant: 'destructive',
-        title: 'Błąd',
-        description: error.response?.data?.message || 'Nie udało się dodać członka.',
-      })
-    },
-  })
+  // Sortuj użytkowników: niezatwierdzeni na górze, potem po dacie utworzenia
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      // Admini zawsze na dole (są automatycznie zatwierdzeni)
+      if (a.role === Role.ADMIN && b.role !== Role.ADMIN) return 1
+      if (b.role === Role.ADMIN && a.role !== Role.ADMIN) return -1
+      
+      // Niezatwierdzeni na górze
+      if (!a.isApproved && b.isApproved) return -1
+      if (a.isApproved && !b.isApproved) return 1
+      
+      // Bez projektu wyżej niż z projektem (wśród zatwierdzonych)
+      if (a.isApproved && b.isApproved) {
+        if (!a.assignedProjectId && b.assignedProjectId) return -1
+        if (a.assignedProjectId && !b.assignedProjectId) return 1
+      }
+      
+      // Po dacie utworzenia (najnowsi wyżej)
+      return new Date(b.createdAt) - new Date(a.createdAt)
+    })
+  }, [users])
 
-  // Mutacja usuwania członka z projektu
-  const removeMemberMutation = useMutation({
-    mutationFn: (userId) => projectsApi.removeProjectMember(selectedProjectId, userId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['users', selectedProjectId] })
-      queryClient.invalidateQueries({ queryKey: ['projectMembers', selectedProjectId] })
-      setMemberToDelete(null)
-      toast({
-        title: 'Sukces',
-        description: 'Członek został usunięty z projektu.',
-      })
-    },
-    onError: (error) => {
-      toast({
-        variant: 'destructive',
-        title: 'Błąd',
-        description: error.response?.data?.message || 'Nie udało się usunąć członka.',
-      })
-    },
-  })
-
-  // Update user approval mutation (tylko dla widoku globalnego)
-  const updateApprovalMutation = useMutation({
+  // Mutacja aktualizacji użytkownika
+  const updateUserMutation = useMutation({
     mutationFn: ({ userId, data }) => usersApi.updateUserApproval(userId, data),
-    onSuccess: () => {
+    onSuccess: (updatedUser) => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       toast({
         title: 'Zaktualizowano',
-        description: 'Status użytkownika został zaktualizowany.',
+        description: 'Dane użytkownika zostały zaktualizowane.',
       })
     },
     onError: (error) => {
@@ -151,14 +107,15 @@ export default function UsersPage() {
     },
   })
 
-  // Delete user mutation (tylko dla widoku globalnego)
+  // Mutacja usuwania użytkownika
   const deleteUserMutation = useMutation({
     mutationFn: (userId) => usersApi.deleteUser(userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
+      setUserToDelete(null)
       toast({
         title: 'Usunięto',
-        description: 'Użytkownik został usunięty.',
+        description: 'Użytkownik został usunięty z systemu.',
       })
     },
     onError: (error) => {
@@ -170,34 +127,23 @@ export default function UsersPage() {
     },
   })
 
-  // Handlery dla widoku globalnego
-  const handleInvite = () => {
-    if (!inviteEmail || !inviteEmail.includes("@")) {
-      toast({
-        variant: 'destructive',
-        title: 'Błąd',
-        description: 'Proszę wprowadzić prawidłowy adres email',
-      })
-      return
-    }
-
-    // TODO: Implement invite functionality when backend endpoint is available
-    toast({
-      title: 'Funkcja w przygotowaniu',
-      description: 'Funkcja zapraszania użytkowników będzie dostępna wkrótce.',
-    })
-    setInviteEmail("")
-  }
-
-  const handleApprove = (userId) => {
-    updateApprovalMutation.mutate({
+  // Handlery
+  const handleApprovalChange = (userId, isApproved) => {
+    updateUserMutation.mutate({
       userId,
-      data: { isApproved: true },
+      data: { isApproved },
     })
   }
 
-  const handleDelete = (userId) => {
-    if (userId === currentUser?.id) {
+  const handleProjectChange = (userId, projectId) => {
+    updateUserMutation.mutate({
+      userId,
+      data: { assignedProjectId: projectId === 'none' ? null : projectId },
+    })
+  }
+
+  const handleDeleteClick = (user) => {
+    if (user.id === currentUser?.id) {
       toast({
         variant: 'destructive',
         title: 'Błąd',
@@ -205,86 +151,58 @@ export default function UsersPage() {
       })
       return
     }
-
-    if (confirm("Czy na pewno chcesz usunąć tego użytkownika?")) {
-      deleteUserMutation.mutate(userId)
-    }
+    setUserToDelete(user)
   }
 
-  // Handlery dla widoku projektu
-  const handleAddMember = () => {
-    if (!newMemberEmail.trim()) {
-      toast({
-        variant: 'destructive',
-        title: 'Błąd',
-        description: 'Email jest wymagany.',
-      })
-      return
+  const handleDeleteConfirm = () => {
+    if (userToDelete) {
+      deleteUserMutation.mutate(userToDelete.id)
     }
-
-    addMemberMutation.mutate({
-      email: newMemberEmail.trim(),
-      role: newMemberRole,
-    })
-  }
-
-  const handleRemoveMember = (user) => {
-    removeMemberMutation.mutate(user.id)
   }
 
   // Funkcje pomocnicze
-  const getRoleLabel = (role) => {
-    if (isProjectView) {
-      return PROJECT_ROLE_LABELS[role] || role
+  const getInitials = (user) => {
+    if (user.firstName && user.lastName) {
+      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
     }
-    return SYSTEM_ROLE_LABELS[role] || role
-  }
-
-  const getRoleBadge = (user) => {
-    if (isProjectView) {
-      const roleColor = PROJECT_ROLE_COLORS[user.role] || 'bg-gray-100 text-gray-800'
-      return (
-        <Badge variant="secondary" className={roleColor}>
-          <Shield className="h-3 w-3 mr-1" />
-          {getRoleLabel(user.role)}
-        </Badge>
-      )
+    if (user.email) {
+      return user.email[0].toUpperCase()
     }
-    return <Badge variant="secondary">{getRoleLabel(user.role)}</Badge>
+    return '?'
   }
 
-  // Jeśli brak projektu w widoku projektu
-  if (isProjectView && !selectedProjectId) {
-    return (
-      <div className="container mx-auto py-8 px-4">
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Wybierz projekt, aby wyświetlić zespół.
-          </AlertDescription>
-        </Alert>
-      </div>
-    )
+  const getUserStatus = (user) => {
+    if (user.role === Role.ADMIN) {
+      return { label: 'Admin', color: STATUS_COLORS.approved, icon: Shield }
+    }
+    if (!user.isApproved) {
+      return { label: 'Oczekuje', color: STATUS_COLORS.pending, icon: Clock }
+    }
+    if (!user.assignedProjectId) {
+      return { label: 'Brak projektu', color: STATUS_COLORS.noProject, icon: AlertCircle }
+    }
+    return { label: 'Aktywny', color: STATUS_COLORS.approved, icon: UserCheck }
   }
 
-  // Jeśli użytkownik nie ma uprawnień w widoku projektu
-  if (isProjectView && !canManageProject && projectRole !== 'editor') {
+  // Sprawdź czy użytkownik jest adminem
+  if (!isAdmin) {
     return (
       <div className="container mx-auto py-8 px-4">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Nie masz uprawnień do zarządzania zespołem projektu. Tylko Manager i Operator mogą przeglądać zespół.
+            Brak dostępu. Ta strona jest dostępna tylko dla administratorów.
           </AlertDescription>
         </Alert>
       </div>
     )
   }
 
-  if (usersLoading) {
+  if (usersLoading || projectsLoading) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-5xl">
+      <div className="container mx-auto py-8 px-4 max-w-6xl">
         <div className="space-y-4">
+          <Skeleton className="h-12 w-full" />
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-12 w-full" />
           <Skeleton className="h-12 w-full" />
@@ -306,308 +224,266 @@ export default function UsersPage() {
     )
   }
 
+  // Statystyki
+  const pendingCount = users.filter(u => !u.isApproved && u.role !== Role.ADMIN).length
+  const activeCount = users.filter(u => u.isApproved && u.assignedProjectId && u.role !== Role.ADMIN).length
+  const totalCount = users.length
+
   return (
-    <div className="container mx-auto py-8 px-4 max-w-5xl">
-      {/* Header Section */}
+    <div className="container mx-auto py-8 px-4 max-w-6xl">
+      {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight mb-2">
-          {isProjectView 
-            ? `Zespół Projektu ${selectedProject?.name || ''}`
-            : 'Użytkownicy Systemu'}
+          Panel Administratora
         </h1>
         <p className="text-muted-foreground">
-          {isProjectView
-            ? `Zarządzaj członkami projektu ${selectedProject?.name || ''}`
-            : 'Zaproś członków zespołu do obsługi wydarzenia.'}
+          Zarządzaj użytkownikami systemu, zatwierdzaj nowe konta i przypisuj projekty.
         </p>
       </div>
 
-      {/* Invite/Add Section */}
-      {isProjectView ? (
-        // Widok projektu - przycisk "Dodaj członka"
-        <Card className="mb-8 border-primary/20 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-xl">Dodaj członka do projektu</CardTitle>
-            <CardDescription>Dodaj nowego członka do projektu poprzez jego adres email</CardDescription>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Oczekujących na zatwierdzenie</CardDescription>
+            <CardTitle className="text-3xl text-yellow-600">{pendingCount}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2" disabled={!canManageProject}>
-              <UserPlus className="h-4 w-4" />
-              Dodaj członka
-            </Button>
-          </CardContent>
         </Card>
-      ) : (
-        // Widok globalny - formularz zaproszenia
-        <Card className="mb-8 border-primary/20 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-xl">Zaproś nowego użytkownika</CardTitle>
-            <CardDescription>Wyślij zaproszenie e-mail do nowego członka zespołu</CardDescription>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Aktywnych użytkowników</CardDescription>
+            <CardTitle className="text-3xl text-green-600">{activeCount}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex gap-3">
-              <Input
-                type="email"
-                placeholder="adres@gmail.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-                className="flex-1"
-              />
-              <Button onClick={handleInvite} className="gap-2">
-                <Send className="h-4 w-4" />
-                Wyślij zaproszenie
-              </Button>
-            </div>
-          </CardContent>
         </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Wszystkich użytkowników</CardDescription>
+            <CardTitle className="text-3xl">{totalCount}</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+
+      {/* Alert dla oczekujących */}
+      {pendingCount > 0 && (
+        <Alert className="mb-6 border-yellow-200 bg-yellow-50 dark:bg-yellow-950">
+          <Clock className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+            Masz <strong>{pendingCount}</strong> {pendingCount === 1 ? 'użytkownika oczekującego' : 'użytkowników oczekujących'} na zatwierdzenie.
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Users Table */}
       <Card>
         <CardHeader>
-          <CardTitle>{isProjectView ? 'Członkowie projektu' : 'Członkowie zespołu'}</CardTitle>
+          <CardTitle>Użytkownicy systemu</CardTitle>
           <CardDescription>
-            {isProjectView
-              ? 'Lista wszystkich członków projektu wraz z ich rolami'
-              : 'Zarządzaj dostępem i rolami użytkowników'}
+            Lista wszystkich zarejestrowanych użytkowników. Zatwierdź nowe konta i przypisz projekty.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {users.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {isProjectView
-                ? 'Brak członków w projekcie. Dodaj pierwszego członka, aby rozpocząć.'
-                : 'Brak użytkowników'}
+          {sortedUsers.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              Brak zarejestrowanych użytkowników.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Imię/Nazwisko</TableHead>
-                  <TableHead>Rola</TableHead>
-                  {!isProjectView && <TableHead>Status</TableHead>}
-                  {!isProjectView && <TableHead>Projekt</TableHead>}
-                  <TableHead className="text-right">Akcje</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    {/* Email Column */}
-                    <TableCell className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      {user.email}
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[300px]">Użytkownik</TableHead>
+                    <TableHead className="w-[120px]">Rola</TableHead>
+                    <TableHead className="w-[140px]">Status</TableHead>
+                    <TableHead className="w-[220px]">Przypisany projekt</TableHead>
+                    <TableHead className="w-[100px] text-right">Akcje</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedUsers.map((user) => {
+                    const status = getUserStatus(user)
+                    const StatusIcon = status.icon
+                    const isCurrentUser = user.id === currentUser?.id
+                    const isAdminUser = user.role === Role.ADMIN
+                    const canModify = !isAdminUser && !isCurrentUser
 
-                    {/* Name Column */}
-                    <TableCell>
-                      {(user.firstName || user.lastName) ? (
-                        <span className="text-sm">
-                          {[user.firstName, user.lastName].filter(Boolean).join(' ')}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
+                    return (
+                      <TableRow 
+                        key={user.id}
+                        className={!user.isApproved && !isAdminUser ? 'bg-yellow-50/50 dark:bg-yellow-950/20' : ''}
+                      >
+                        {/* Użytkownik Column */}
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={user.avatarUrl} alt={user.email} />
+                              <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                                {getInitials(user)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col">
+                              <span className="font-medium text-sm">
+                                {user.firstName && user.lastName 
+                                  ? `${user.firstName} ${user.lastName}`
+                                  : user.email
+                                }
+                              </span>
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Mail className="h-3 w-3" />
+                                {user.email}
+                              </span>
+                            </div>
+                          </div>
+                        </TableCell>
 
-                    {/* Role Column */}
-                    <TableCell>
-                      {getRoleBadge(user)}
-                    </TableCell>
-
-                    {/* Status Column (tylko widok globalny) */}
-                    {!isProjectView && (
-                      <TableCell>
-                        {user.role === Role.ADMIN ? (
-                          <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                            Aktywny
+                        {/* Rola Column */}
+                        <TableCell>
+                          <Badge variant="secondary" className="font-normal">
+                            <Shield className="h-3 w-3 mr-1" />
+                            {SYSTEM_ROLE_LABELS[user.role] || user.role}
                           </Badge>
-                        ) : !user.isApproved ? (
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                            Oczekuje
-                          </Badge>
-                        ) : !user.assignedProjectId ? (
-                          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                            Brak projektu
-                          </Badge>
-                        ) : (
-                          <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                            Aktywny
-                          </Badge>
-                        )}
-                      </TableCell>
-                    )}
+                        </TableCell>
 
-                    {/* Project Column (tylko widok globalny) */}
-                    {!isProjectView && (
-                      <TableCell>
-                        {user.assignedProjectName || (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                    )}
+                        {/* Status Column */}
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {canModify && !user.isApproved ? (
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={user.isApproved}
+                                  onCheckedChange={(checked) => handleApprovalChange(user.id, checked)}
+                                  disabled={updateUserMutation.isPending}
+                                />
+                                <span className="text-sm text-muted-foreground">
+                                  {user.isApproved ? 'Tak' : 'Nie'}
+                                </span>
+                              </div>
+                            ) : (
+                              <Badge variant="outline" className={status.color}>
+                                <StatusIcon className="h-3 w-3 mr-1" />
+                                {status.label}
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
 
-                    {/* Actions Column */}
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {isProjectView ? (
-                          // Widok projektu - tylko usuń (jeśli nie owner)
-                          user.role !== 'owner' && canManageProject && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setMemberToDelete(user)}
-                              className="text-destructive hover:text-destructive"
+                        {/* Przypisany Projekt Column */}
+                        <TableCell>
+                          {isAdminUser ? (
+                            <span className="text-sm text-muted-foreground italic">
+                              Dostęp do wszystkich
+                            </span>
+                          ) : (
+                            <Select
+                              value={user.assignedProjectId || 'none'}
+                              onValueChange={(value) => handleProjectChange(user.id, value)}
+                              disabled={updateUserMutation.isPending || !canModify}
                             >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )
-                        ) : (
-                          // Widok globalny - zatwierdź i usuń
-                          <>
-                            {!user.isApproved && user.role !== Role.ADMIN && (
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Wybierz projekt" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">
+                                  <span className="text-muted-foreground">— Brak —</span>
+                                </SelectItem>
+                                {projects.map((project) => (
+                                  <SelectItem key={project.id} value={project.id}>
+                                    {project.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </TableCell>
+
+                        {/* Akcje Column */}
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            {/* Przycisk Zatwierdź - tylko dla niezatwierdzonych */}
+                            {canModify && !user.isApproved && (
                               <Button
                                 variant="default"
                                 size="sm"
-                                onClick={() => handleApprove(user.id)}
-                                disabled={updateApprovalMutation.isPending || !user.assignedProjectId}
-                                className="gap-2"
+                                onClick={() => handleApprovalChange(user.id, true)}
+                                disabled={updateUserMutation.isPending}
+                                className="gap-1"
                               >
-                                <Check className="h-4 w-4" />
+                                {updateUserMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Check className="h-4 w-4" />
+                                )}
                                 Zatwierdź
                               </Button>
                             )}
+                            
+                            {/* Przycisk Usuń */}
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleDelete(user.id)}
-                              disabled={user.id === currentUser?.id || deleteUserMutation.isPending}
+                              onClick={() => handleDeleteClick(user)}
+                              disabled={isCurrentUser || isAdminUser || deleteUserMutation.isPending}
                               className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              title={
+                                isCurrentUser 
+                                  ? 'Nie możesz usunąć własnego konta' 
+                                  : isAdminUser 
+                                    ? 'Nie można usunąć administratora'
+                                    : 'Usuń użytkownika'
+                              }
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Dialog dodawania członka do projektu */}
-      {isProjectView && (
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Dodaj członka do projektu</DialogTitle>
-              <DialogDescription>
-                Dodaj nowego członka do projektu poprzez jego adres email.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="uzytkownik@example.com"
-                  value={newMemberEmail}
-                  onChange={(e) => setNewMemberEmail(e.target.value)}
-                  disabled={addMemberMutation.isPending}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="role">Rola</Label>
-                <Select
-                  value={newMemberRole}
-                  onValueChange={setNewMemberRole}
-                  disabled={addMemberMutation.isPending}
-                >
-                  <SelectTrigger id="role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="viewer">Audytor (viewer)</SelectItem>
-                    <SelectItem value="editor">Operator (editor)</SelectItem>
-                    <SelectItem value="owner" disabled>
-                      Manager (owner) - tylko dla właściciela
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Audytor: tylko podgląd | Operator: edycja danych | Manager: pełny dostęp
-                </p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsAddDialogOpen(false)}
-                disabled={addMemberMutation.isPending}
-              >
-                Anuluj
-              </Button>
-              <Button
-                onClick={handleAddMember}
-                disabled={addMemberMutation.isPending || !newMemberEmail.trim()}
-              >
-                {addMemberMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Dodawanie...
-                  </>
-                ) : (
-                  'Dodaj członka'
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Dialog potwierdzenia usunięcia członka */}
-      {isProjectView && (
-        <AlertDialog
-          open={!!memberToDelete}
-          onOpenChange={(open) => !open && setMemberToDelete(null)}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Usunąć członka z projektu?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Czy na pewno chcesz usunąć{' '}
-                <strong>{memberToDelete?.email || memberToDelete?.id}</strong> z projektu?
-                Ta operacja nie może być cofnięta.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={removeMemberMutation.isPending}>
-                Anuluj
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => handleRemoveMember(memberToDelete)}
-                disabled={removeMemberMutation.isPending}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                {removeMemberMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Usuwanie...
-                  </>
-                ) : (
-                  'Usuń'
-                )}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
+      {/* Alert Dialog - Potwierdzenie usunięcia */}
+      <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Czy na pewno chcesz usunąć tego użytkownika?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Zamierzasz usunąć użytkownika <strong>{userToDelete?.email}</strong>.
+              {userToDelete?.firstName && userToDelete?.lastName && (
+                <> ({userToDelete.firstName} {userToDelete.lastName})</>
+              )}
+              <br /><br />
+              Ta operacja jest <strong>nieodwracalna</strong>. Użytkownik straci dostęp do systemu
+              i wszystkie jego dane zostaną usunięte.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteUserMutation.isPending}>
+              Anuluj
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={deleteUserMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteUserMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Usuwanie...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Usuń użytkownika
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

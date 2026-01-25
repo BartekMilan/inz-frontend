@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProjectProvider } from './contexts/ProjectContext';
 import { Toaster } from './components/ui/toaster';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -17,6 +17,7 @@ import RegisterPage from './pages/RegisterPage';
 import PasswordResetPage from './pages/PasswordResetPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import DashboardPage from './pages/DashboardPage';
+import PendingApprovalPage from './pages/PendingApprovalPage';
 
 // Role-protected route wrapper component
 function RoleProtectedRoute({ children, allowedRoles }) {
@@ -25,6 +26,29 @@ function RoleProtectedRoute({ children, allowedRoles }) {
       {children}
     </ProtectedRoute>
   );
+}
+
+// Komponent do przekierowania zależnego od roli
+// REGISTRAR -> /participants, ADMIN -> /dashboard
+function RoleBasedRedirect() {
+  const { userRole } = useAuth();
+  
+  if (userRole === Role.REGISTRAR) {
+    return <Navigate to="/participants" replace />;
+  }
+  return <Navigate to="/dashboard" replace />;
+}
+
+// Wrapper dla Dashboard - przekierowuje REGISTRAR na /participants
+function DashboardRouteGuard() {
+  const { userRole } = useAuth();
+  
+  // REGISTRAR nie ma dostępu do dashboardu
+  if (userRole === Role.REGISTRAR) {
+    return <Navigate to="/participants" replace />;
+  }
+  
+  return <DashboardPage />;
 }
 
 function App() {
@@ -37,6 +61,14 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/password-reset" element={<PasswordResetPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route
+            path="/pending-approval"
+            element={
+              <ProtectedRoute requireApproval={false}>
+                <PendingApprovalPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/" element={<Navigate to="/login" replace />} />
           
           {/* Protected routes */}
@@ -63,10 +95,10 @@ function App() {
                         element={<UsersPage />} 
                       />
                       
-                      {/* Dashboard - dostęp dla wszystkich */}
+                      {/* Dashboard - dostęp tylko dla ADMIN (REGISTRAR przekierowany na /participants) */}
                       <Route 
                         path="/dashboard" 
-                        element={<DashboardPage />} 
+                        element={<DashboardRouteGuard />} 
                       />
                       
                       {/* Admin and Registrar routes */}
@@ -95,11 +127,11 @@ function App() {
                         } 
                       />
                       
-                      {/* Default redirect for authenticated users - przekierowanie do dashboard */}
-                      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                      {/* Default redirect for authenticated users - zależne od roli */}
+                      <Route path="/" element={<RoleBasedRedirect />} />
                       
-                      {/* 404 inside dashboard */}
-                      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                      {/* 404 inside dashboard - przekieruj zależnie od roli */}
+                      <Route path="*" element={<RoleBasedRedirect />} />
                     </Routes>
                   </DashboardLayout>
                 </ProjectProvider>

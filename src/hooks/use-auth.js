@@ -3,70 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../services/auth.service';
 import { useToast } from './use-toast';
-import { Role } from '../lib/roles';
 
-// Login mutation hook
-export function useLogin() {
-  const { login } = useAuth();
-  const { toast } = useToast();
-  const navigate = useNavigate();
-
-  return useMutation({
-    mutationFn: ({ email, password }) => login(email, password),
-    onSuccess: (response) => {
-      // Get user role from response
-      const userRole = response.user?.user_metadata?.role || response.user?.role;
-      
-      // For registrars, redirect to participants page
-      // The assignedProjectId is already stored in localStorage by AuthContext
-      // ProjectContext will automatically initialize from localStorage when it mounts
-      if (userRole === Role.REGISTRAR && response.user?.assignedProjectId) {
-        // Redirect to participants page immediately
-        // ProjectContext will be available there and will initialize from localStorage
-        navigate('/participants', { replace: true });
-      }
-
-      toast({
-        title: 'Zalogowano pomyślnie',
-        description: 'Witaj ponownie!',
-      });
-      
-      // For non-registrars, navigation is handled by useEffect in LoginPage
-      // based on isAuthenticated state change
-    },
-    onError: (error) => {
-      toast({
-        variant: 'destructive',
-        title: 'Błąd logowania',
-        description: error.response?.data?.message || 'Nieprawidłowy email lub hasło',
-      });
-    },
-  });
-}
-
-// Register mutation hook
-export function useRegister() {
-  const navigate = useNavigate();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: (data) => authApi.register(data),
-    onSuccess: () => {
-      toast({
-        title: 'Rejestracja pomyślna',
-        description: 'Sprawdź swoją skrzynkę email, aby potwierdzić konto.',
-      });
-      navigate('/login');
-    },
-    onError: (error) => {
-      toast({
-        variant: 'destructive',
-        title: 'Błąd rejestracji',
-        description: error.response?.data?.message || 'Nie udało się utworzyć konta',
-      });
-    },
-  });
-}
+// ============================================================================
+// AUTH HOOKS - Zrefaktoryzowane dla Supabase Auth
+// ============================================================================
 
 // Logout mutation hook
 export function useLogout() {
@@ -81,62 +21,16 @@ export function useLogout() {
         title: 'Wylogowano',
         description: 'Do zobaczenia!',
       });
-      navigate('/login');
+      navigate('/login', { replace: true });
     },
     onError: () => {
-      // Even on error, we want to redirect
-      navigate('/login');
+      // Nawet przy błędzie chcemy przekierować
+      navigate('/login', { replace: true });
     },
   });
 }
 
-// Reset password mutation hook
-export function useResetPassword() {
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: (email) => authApi.resetPassword(email),
-    onSuccess: () => {
-      toast({
-        title: 'Email wysłany',
-        description: 'Sprawdź swoją skrzynkę email, aby zresetować hasło.',
-      });
-    },
-    onError: (error) => {
-      toast({
-        variant: 'destructive',
-        title: 'Błąd',
-        description: error.response?.data?.message || 'Nie udało się wysłać emaila',
-      });
-    },
-  });
-}
-
-// Update password mutation hook
-export function useUpdatePassword() {
-  const navigate = useNavigate();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: (password) => authApi.updatePassword(password),
-    onSuccess: () => {
-      toast({
-        title: 'Hasło zmienione',
-        description: 'Twoje hasło zostało pomyślnie zmienione.',
-      });
-      navigate('/login');
-    },
-    onError: (error) => {
-      toast({
-        variant: 'destructive',
-        title: 'Błąd',
-        description: error.response?.data?.message || 'Nie udało się zmienić hasła',
-      });
-    },
-  });
-}
-
-// Google OAuth hook
+// Google OAuth hook - teraz używa Supabase
 export function useGoogleLogin() {
   const { loginWithGoogle } = useAuth();
   const { toast } = useToast();
@@ -146,49 +40,9 @@ export function useGoogleLogin() {
     onError: (error) => {
       toast({
         variant: 'destructive',
-        title: 'Błąd',
-        description: error.response?.data?.message || 'Nie udało się połączyć z Google',
-      });
-    },
-  });
-}
-
-// OAuth callback hook
-export function useOAuthCallback() {
-  const { handleOAuthCallback } = useAuth();
-  const navigate = useNavigate();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: (code) => handleOAuthCallback(code),
-    onSuccess: (response) => {
-      // Get user role from response
-      const userRole = response.user?.user_metadata?.role || response.user?.role;
-      
-      // For registrars, redirect to participants page
-      // The assignedProjectId is already stored in localStorage by AuthContext
-      // ProjectContext will automatically initialize from localStorage when it mounts
-      if (userRole === Role.REGISTRAR && response.user?.assignedProjectId) {
-        // Redirect to participants page immediately
-        // ProjectContext will be available there and will initialize from localStorage
-        navigate('/participants', { replace: true });
-      }
-
-      toast({
-        title: 'Zalogowano pomyślnie',
-        description: 'Witaj!',
-      });
-      
-      // For non-registrars, navigation will be handled by AuthCallbackPage
-      // based on isAuthenticated state change
-    },
-    onError: (error) => {
-      toast({
-        variant: 'destructive',
         title: 'Błąd logowania',
-        description: error.response?.data?.message || 'Nie udało się zalogować',
+        description: error.message || 'Nie udało się połączyć z Google',
       });
-      navigate('/login');
     },
   });
 }
@@ -202,5 +56,113 @@ export function useProfile() {
     queryFn: authApi.getProfile,
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+// ============================================================================
+// DEPRECATED HOOKS - Zachowane dla kompatybilności wstecznej
+// Nie są już używane z nowym flow Supabase Auth
+// ============================================================================
+
+/**
+ * @deprecated Nie używane z Supabase Auth - logowanie email/password obsługiwane przez Supabase
+ */
+export function useLogin() {
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  return useMutation({
+    mutationFn: () => {
+      throw new Error('useLogin jest deprecated - użyj useGoogleLogin lub Supabase Auth');
+    },
+    onError: (error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Błąd',
+        description: error.message,
+      });
+    },
+  });
+}
+
+/**
+ * @deprecated Nie używane z Supabase Auth - rejestracja obsługiwana przez Supabase
+ */
+export function useRegister() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: () => {
+      throw new Error('useRegister jest deprecated - użyj Supabase Auth');
+    },
+    onError: (error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Błąd',
+        description: error.message,
+      });
+    },
+  });
+}
+
+/**
+ * @deprecated Nie używane z nowym flow - onAuthStateChange obsługuje callback automatycznie
+ */
+export function useOAuthCallback() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: () => {
+      // Ten hook nie jest już potrzebny - Supabase obsługuje callback automatycznie
+      console.warn('[useOAuthCallback] Ten hook jest deprecated - Supabase obsługuje callback automatycznie');
+      return Promise.resolve();
+    },
+    onError: (error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Błąd',
+        description: error.message || 'Nie udało się przetworzyć logowania',
+      });
+    },
+  });
+}
+
+/**
+ * @deprecated Reset hasła przez Supabase
+ */
+export function useResetPassword() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: () => {
+      throw new Error('useResetPassword jest deprecated - użyj Supabase Auth');
+    },
+    onError: (error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Błąd',
+        description: error.message,
+      });
+    },
+  });
+}
+
+/**
+ * @deprecated Update hasła przez Supabase
+ */
+export function useUpdatePassword() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: () => {
+      throw new Error('useUpdatePassword jest deprecated - użyj Supabase Auth');
+    },
+    onError: (error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Błąd',
+        description: error.message,
+      });
+    },
   });
 }

@@ -64,11 +64,22 @@ export const projectsApi = {
   /**
    * Pobiera statystyki projektu
    * @param {string} projectId - ID projektu
-   * @returns {Promise<Object>}
+   * @returns {Promise<Object|null>} - Statystyki lub null jeśli brak dostępu (403)
    */
   getProjectStats: async (projectId) => {
-    const response = await apiClient.get(`/projects/${projectId}/stats`);
-    return response.data;
+    try {
+      const response = await apiClient.get(`/projects/${projectId}/stats`);
+      return response.data;
+    } catch (error) {
+      // Jeśli 403 (Forbidden) - użytkownik nie ma uprawnień do statystyk
+      // Zwróć null zamiast rzucać błąd (zapobiega crashowi React)
+      if (error?.response?.status === 403) {
+        console.warn('[projectsApi.getProjectStats] Brak uprawnień do statystyk (403)');
+        return null;
+      }
+      // Inne błędy - rzuć dalej
+      throw error;
+    }
   },
 
   // =====================================================

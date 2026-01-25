@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useEffect } from "react"
+import { useParams, useNavigate } from "react-router-dom"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -26,13 +27,16 @@ import {
 } from "@/components/ui/form"
 import {
   User,
+  UserPen,
   Save,
   X,
   Loader2,
+  ArrowLeft,
 } from "lucide-react"
 import { useFieldDefinitions } from "@/hooks/use-field-definitions"
-import { useCreateParticipant } from "@/hooks/use-participants"
+import { useCreateParticipant, useUpdateParticipant, useParticipant } from "@/hooks/use-participants"
 import { useProject } from "@/contexts/ProjectContext"
+import { useToast } from "@/hooks/use-toast"
 
 /**
  * Generuje schemat zod na podstawie konfiguracji pól
@@ -406,15 +410,29 @@ function renderFormField(field, control) {
 }
 
 export default function ParticipantFormPage() {
+  const { id: participantId } = useParams()
+  const navigate = useNavigate()
   const { selectedProjectId } = useProject()
+  const { toast } = useToast()
   
-  // Debug: log projectId
+  // Określ tryb formularza: 'edit' jeśli mamy ID, 'new' w przeciwnym razie
+  const isEditMode = !!participantId
+  
+  // Debug: log projectId and mode
+  console.log('[ParticipantFormPage] Mode:', isEditMode ? 'EDIT' : 'NEW')
+  console.log('[ParticipantFormPage] participantId:', participantId)
   console.log('[ParticipantFormPage] selectedProjectId:', selectedProjectId)
-  console.log('[ParticipantFormPage] selectedProjectId type:', typeof selectedProjectId)
-  console.log('[ParticipantFormPage] selectedProjectId truthy?', !!selectedProjectId)
   
   const { data: fieldsConfig = [], isLoading: isLoadingFields, error: fieldsError } = useFieldDefinitions()
   const createParticipantMutation = useCreateParticipant()
+  const updateParticipantMutation = useUpdateParticipant()
+  
+  // Pobierz dane uczestnika do edycji
+  const { 
+    data: participantData, 
+    isLoading: isLoadingParticipant,
+    error: participantError 
+  } = useParticipant(participantId)
 
   // Debug: log fieldsConfig
   console.log('[ParticipantFormPage] fieldsConfig:', fieldsConfig)
@@ -424,6 +442,13 @@ export default function ParticipantFormPage() {
   if (fieldsConfig.length > 0) {
     console.log('[ParticipantFormPage] Sample field:', fieldsConfig[0])
     console.log('[ParticipantFormPage] Field keys:', Object.keys(fieldsConfig[0]))
+  }
+  
+  // Debug: log participant data (edit mode)
+  if (isEditMode) {
+    console.log('[ParticipantFormPage] participantData:', participantData)
+    console.log('[ParticipantFormPage] isLoadingParticipant:', isLoadingParticipant)
+    console.log('[ParticipantFormPage] participantError:', participantError)
   }
 
   // Generuj schemat zod na podstawie konfiguracji pól
@@ -461,23 +486,83 @@ export default function ParticipantFormPage() {
     defaultValues,
     mode: "onBlur", // Walidacja przy blur
   })
+  
+  // Prefilluj formularz danymi uczestnika w trybie edycji
+  useEffect(() => {
+    if (isEditMode && participantData && fieldsConfig.length > 0) {
+      console.log('[ParticipantFormPage] Prefilling form with participant data:', participantData)
+      
+      const formValues = {}
+      fieldsConfig.forEach((field) => {
+        const fieldName = field.fieldName || field.field_name
+        const fieldType = field.fieldType || field.field_type || 'text'
+        
+        if (!fieldName) return
+        
+        let value = participantData[fieldName]
+        
+        // Konwersja wartości do odpowiedniego typu
+        if (fieldType === 'checkbox') {
+          // Konwersja string 'Tak'/'Nie' lub boolean
+          if (typeof value === 'string') {
+            value = value.toLowerCase() === 'tak' || value === 'true' || value === '1'
+          } else {
+            value = Boolean(value)
+          }
+        } else if (fieldType === 'number') {
+          value = value !== undefined && value !== null && value !== '' ? Number(value) : undefined
+        } else {
+          value = value !== undefined && value !== null ? String(value) : ''
+        }
+        
+        formValues[fieldName] = value
+      })
+      
+      console.log('[ParticipantFormPage] Setting form values:', formValues)
+      form.reset(formValues)
+    }
+  }, [isEditMode, participantData, fieldsConfig, form])
 
   const onSubmit = async (data) => {
     try {
-      await createParticipantMutation.mutateAsync(data)
-      // Reset formularza po udanym zapisie
-      form.reset(defaultValues)
-      // Można dodać toast notification tutaj
-      alert("Dane zostały zapisane pomyślnie!")
+      if (isEditMode) {
+        // Aktualizacja istniejącego uczestnika
+        await updateParticipantMutation.mutateAsync({
+          participantId,
+          data,
+        })
+        toast({
+          title: 'Sukces',
+          description: 'Dane uczestnika zostały zaktualizowane.',
+        })
+      } else {
+        // Tworzenie nowego uczestnika
+        await createParticipantMutation.mutateAsync(data)
+        toast({
+          title: 'Sukces',
+          description: 'Nowy uczestnik został dodany.',
+        })
+      }
+      
+      // Powrót do listy uczestników
+      navigate('/participants')
     } catch (error) {
       console.error("Błąd podczas zapisywania:", error)
-      alert("Wystąpił błąd podczas zapisywania danych.")
+      toast({
+        variant: 'destructive',
+        title: 'Błąd',
+        description: error.message || 'Wystąpił błąd podczas zapisywania danych.',
+      })
     }
   }
 
   const handleCancel = () => {
-    form.reset(defaultValues)
+    navigate('/participants')
   }
+  
+  // Loading state
+  const isLoading = isLoadingFields || (isEditMode && isLoadingParticipant)
+  const isSaving = createParticipantMutation.isPending || updateParticipantMutation.isPending
 
   if (!selectedProjectId) {
     return (
@@ -489,8 +574,12 @@ export default function ParticipantFormPage() {
                 Nie wybrano projektu.
               </p>
               <p className="text-sm text-muted-foreground">
-                Wybierz projekt, aby móc dodawać uczestników.
+                Wybierz projekt, aby móc {isEditMode ? 'edytować' : 'dodawać'} uczestników.
               </p>
+              <Button variant="outline" onClick={() => navigate('/participants')}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Powrót do listy
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -498,29 +587,62 @@ export default function ParticipantFormPage() {
     )
   }
 
-  if (isLoadingFields) {
+  if (isLoading) {
     return (
       <div className="max-w-5xl mx-auto pb-32 flex items-center justify-center min-h-screen">
         <div className="flex items-center gap-2">
           <Loader2 className="w-5 h-5 animate-spin text-primary" />
-          <span className="text-muted-foreground">Ładowanie konfiguracji formularza...</span>
+          <span className="text-muted-foreground">
+            {isEditMode ? 'Ładowanie danych uczestnika...' : 'Ładowanie konfiguracji formularza...'}
+          </span>
         </div>
       </div>
     )
   }
 
-  if (fieldsError) {
+  if (fieldsError || participantError) {
+    const errorMessage = fieldsError?.message || participantError?.message || "Spróbuj odświeżyć stronę."
     return (
       <div className="max-w-5xl mx-auto pb-32 flex items-center justify-center min-h-screen">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="text-center space-y-4">
               <p className="text-destructive">
-                Wystąpił błąd podczas ładowania konfiguracji formularza.
+                {isEditMode && participantError 
+                  ? 'Nie udało się załadować danych uczestnika.' 
+                  : 'Wystąpił błąd podczas ładowania konfiguracji formularza.'}
               </p>
               <p className="text-sm text-muted-foreground">
-                {fieldsError.message || "Spróbuj odświeżyć stronę."}
+                {errorMessage}
               </p>
+              <Button variant="outline" onClick={() => navigate('/participants')}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Powrót do listy
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+  
+  // W trybie edycji sprawdź czy uczestnik został znaleziony
+  if (isEditMode && !participantData) {
+    return (
+      <div className="max-w-5xl mx-auto pb-32 flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-4">
+              <p className="text-destructive">
+                Uczestnik nie został znaleziony.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Uczestnik o ID {participantId} nie istnieje lub został usunięty.
+              </p>
+              <Button variant="outline" onClick={() => navigate('/participants')}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Powrót do listy
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -538,8 +660,12 @@ export default function ParticipantFormPage() {
                 Brak skonfigurowanych pól dla tego projektu.
               </p>
               <p className="text-sm text-muted-foreground">
-                Skonfiguruj pola w ustawieniach projektu, aby móc dodawać uczestników.
+                Skonfiguruj pola w ustawieniach projektu, aby móc {isEditMode ? 'edytować' : 'dodawać'} uczestników.
               </p>
+              <Button variant="outline" onClick={() => navigate('/participants')}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Powrót do listy
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -552,12 +678,31 @@ export default function ParticipantFormPage() {
       {/* Header */}
       <div className="sticky top-0 bg-background/95 backdrop-blur-md border-b z-10 px-6 py-6">
         <div className="flex items-center gap-4">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/participants')}
+            className="mr-2"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
           <div className="p-2.5 bg-primary/10 rounded-lg">
-            <User className="w-5 h-5 text-primary" />
+            {isEditMode ? (
+              <UserPen className="w-5 h-5 text-primary" />
+            ) : (
+              <User className="w-5 h-5 text-primary" />
+            )}
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-foreground">Dane Uczestnika</h1>
-            <p className="text-sm text-muted-foreground mt-1">Wypełnij formularz rejestracyjny</p>
+            <h1 className="text-xl font-semibold text-foreground">
+              {isEditMode ? 'Edycja Uczestnika' : 'Nowy Uczestnik'}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {isEditMode 
+                ? `Edytujesz dane uczestnika #${participantId}` 
+                : 'Wypełnij formularz, aby dodać nowego uczestnika'}
+            </p>
           </div>
         </div>
       </div>
@@ -567,7 +712,11 @@ export default function ParticipantFormPage() {
           <Card>
             <CardHeader className="pb-4">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <User className="w-4 h-4 text-primary" />
+                {isEditMode ? (
+                  <UserPen className="w-4 h-4 text-primary" />
+                ) : (
+                  <User className="w-4 h-4 text-primary" />
+                )}
                 Dane Uczestnika
               </CardTitle>
             </CardHeader>
@@ -596,24 +745,24 @@ export default function ParticipantFormPage() {
                   type="button"
                   variant="outline"
                   onClick={handleCancel}
-                  disabled={createParticipantMutation.isPending}
+                  disabled={isSaving}
                 >
                   <X className="w-4 h-4 mr-2" />
                   Anuluj
                 </Button>
                 <Button
                   type="submit"
-                  disabled={createParticipantMutation.isPending}
+                  disabled={isSaving}
                 >
-                  {createParticipantMutation.isPending ? (
+                  {isSaving ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Zapisywanie...
+                      {isEditMode ? 'Aktualizowanie...' : 'Zapisywanie...'}
                     </>
                   ) : (
                     <>
                       <Save className="w-4 h-4 mr-2" />
-                      Zapisz
+                      {isEditMode ? 'Zaktualizuj' : 'Zapisz'}
                     </>
                   )}
                 </Button>

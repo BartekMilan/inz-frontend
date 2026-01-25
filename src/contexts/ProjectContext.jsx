@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '../services/projects.service';
+import { useAuth } from './AuthContext';
 
 const ProjectContext = createContext(null);
 
@@ -14,6 +15,8 @@ export const ROLES = {
 
 export function ProjectProvider({ children }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  
   const [selectedProjectId, setSelectedProjectId] = useState(() => {
     // Initialize from localStorage
     // For registrars, check if assigned_project_id is stored
@@ -36,8 +39,12 @@ export function ProjectProvider({ children }) {
 
   const userRole = roleData?.role || ROLES.REGISTRAR;
   const isAdmin = userRole === ROLES.ADMIN;
+  
+  // Get assignedProjectId from user profile (for REGISTRAR)
+  const assignedProjectId = user?.assignedProjectId || null;
 
-  // Fetch user's projects
+  // Fetch user's projects - ONLY for ADMIN
+  // For REGISTRAR, we use assignedProjectId directly
   const {
     data: projectsData,
     isLoading: isLoadingProjects,
@@ -47,35 +54,37 @@ export function ProjectProvider({ children }) {
     queryKey: ['projects'],
     queryFn: projectsApi.getProjects,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    // Only fetch projects list for ADMIN, REGISTRAR uses assignedProjectId
+    enabled: isAdmin || !assignedProjectId,
   });
 
   const projects = projectsData?.projects || [];
 
   // Auto-select project based on role
   useEffect(() => {
+    // For REGISTRAR with assignedProjectId - always use that project
+    if (!isAdmin && assignedProjectId) {
+      if (selectedProjectId !== assignedProjectId) {
+        console.log('[ProjectContext] REGISTRAR: Using assignedProjectId:', assignedProjectId);
+        setSelectedProjectId(assignedProjectId);
+        localStorage.setItem(SELECTED_PROJECT_KEY, assignedProjectId);
+        localStorage.setItem('assignedProjectId', assignedProjectId);
+      }
+      return;
+    }
+    
+    // For ADMIN or REGISTRAR without assignedProjectId - use projects list
     if (!isLoadingProjects && projects.length > 0) {
       const projectExists = projects.some(p => p.id === selectedProjectId);
       
-      // For registrars, prioritize assigned_project_id from localStorage
-      if (!isAdmin) {
-        const assignedProjectId = localStorage.getItem('assignedProjectId');
-        if (assignedProjectId && projects.some(p => p.id === assignedProjectId)) {
-          if (selectedProjectId !== assignedProjectId) {
-            setSelectedProjectId(assignedProjectId);
-            localStorage.setItem(SELECTED_PROJECT_KEY, assignedProjectId);
-          }
-          return;
-        }
-      }
-      
-      // For admins or if no assigned project, select first available
+      // Select first available if no project selected or selected project doesn't exist
       if (!selectedProjectId || !projectExists) {
         const firstProject = projects[0];
         setSelectedProjectId(firstProject.id);
         localStorage.setItem(SELECTED_PROJECT_KEY, firstProject.id);
       }
     }
-  }, [projects, selectedProjectId, isLoadingProjects, isAdmin]);
+  }, [projects, selectedProjectId, isLoadingProjects, isAdmin, assignedProjectId]);
 
   // Fetch selected project details with user role
   const {
@@ -217,7 +226,8 @@ export function ProjectProvider({ children }) {
     isDeletingProject: deleteProjectMutation.isPending,
     
     // Helpers
-    hasProjects: projects.length > 0,
+    // For REGISTRAR with assignedProjectId, hasProjects is true even if projects list is empty
+    hasProjects: projects.length > 0 || !!assignedProjectId,
     hasSelectedProject: !!selectedProject,
     canSwitchProjects: isAdmin && projects.length > 1,
   };

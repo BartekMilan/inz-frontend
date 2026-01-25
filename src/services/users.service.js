@@ -11,7 +11,7 @@ export const usersApi = {
 
   // Update user approval and project assignment (admin only)
   updateUserApproval: async (userId, data) => {
-    const response = await apiClient.put(`/users/${userId}/approval`, data);
+    const response = await apiClient.patch(`/users/${userId}`, data);
     return response.data;
   },
 

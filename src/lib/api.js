@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { supabase } from './supabase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -10,13 +11,28 @@ export const apiClient = axios.create({
   withCredentials: true,
 });
 
-// Request interceptor - add auth token to requests
+// ============================================================================
+// REQUEST INTERCEPTOR - Pobiera token z Supabase
+// ============================================================================
 apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+  async (config) => {
+    try {
+      // Pobierz aktualną sesję z Supabase (zawsze świeży token)
+      const { data, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.warn('[API] ⚠️ Błąd pobierania sesji Supabase:', error.message);
+      }
+      
+      const token = data.session?.access_token;
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.warn('[API] ⚠️ Błąd w interceptorze:', error.message);
     }
+    
     return config;
   },
   (error) => {
@@ -24,37 +40,38 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor - handle token refresh on 401
+// ============================================================================
+// RESPONSE INTERCEPTOR - Obsługa błędów 401
+// ============================================================================
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // If 401 and not already retrying
+    // Jeśli 401 i nie próbowaliśmy jeszcze refreshować
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
+        // Supabase automatycznie odświeża token, więc spróbujmy ponownie
+        const { data, error: refreshError } = await supabase.auth.getSession();
         
-        if (refreshToken) {
-          const response = await axios.post(`${API_URL}/auth/refresh`, {
-            refreshToken,
-          });
-
-          const { accessToken, refreshToken: newRefreshToken } = response.data;
-
-          localStorage.setItem('accessToken', accessToken);
-          localStorage.setItem('refreshToken', newRefreshToken);
-
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return apiClient(originalRequest);
+        if (refreshError || !data.session) {
+          // Token nieważny - wyloguj użytkownika
+          console.warn('[API] ⚠️ Sesja wygasła - wylogowanie');
+          await supabase.auth.signOut();
+          window.location.href = '/login';
+          return Promise.reject(error);
         }
+
+        // Mamy nowy token - ponów request
+        originalRequest.headers.Authorization = `Bearer ${data.session.access_token}`;
+        return apiClient(originalRequest);
+        
       } catch (refreshError) {
-        // Refresh failed - clear tokens and redirect to login
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
+        // Refresh się nie powiódł - wyloguj
+        console.error('[API] ❌ Błąd odświeżania tokena:', refreshError);
+        await supabase.auth.signOut();
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }

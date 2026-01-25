@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState, useEffect, useCallback } from "react"
+import { useNavigate } from "react-router-dom"
 import {
   flexRender,
   getCoreRowModel,
@@ -38,18 +39,8 @@ import { useCreateDocumentTask } from "@/hooks/use-create-document-task"
 import { useProject } from "@/contexts/ProjectContext"
 import { useToast } from "@/hooks/use-toast"
 
-const useNavigation = () => {
-  const navigate = (path) => {
-    // In a real react-router-dom app, use: navigate(path)
-    // For demo/preview, we log and show alert
-    console.log("Navigate to:", path)
-    alert(`Navigation to: ${path}`)
-  }
-  return navigate
-}
-
 export default function DynamicParticipantsTable({ config, data, canEditData = true }) {
-  const navigate = useNavigation()
+  const navigate = useNavigate()
   const { selectedProjectId } = useProject()
   const { toast } = useToast()
   const [sorting, setSorting] = useState([])
@@ -390,7 +381,7 @@ export default function DynamicParticipantsTable({ config, data, canEditData = t
                 </Button>
                 <Button variant="outline" onClick={handleAddParticipant} className="gap-2 bg-transparent">
                   <Plus className="h-4 w-4" />
-                  Add Participant
+                  Dodaj uczestnika
                 </Button>
               </div>
             )}
